@@ -1,16 +1,17 @@
-# Abhängigkeiten
+# Das Werkzeug bringt seine Programmbibliotheken selbst mit.
+werkzeug/node_modules/
 node_modules/
 
-# Lokal erzeugte Dateien — werden jederzeit neu gebaut
+# Erzeugte Dateien — entstehen bei jedem npm run build neu.
 dist/
 generated/
 print-assets/
 
-# Laufzeitdaten vom Server.
-# ACHTUNG: enthält Namen und Postadressen. Niemals ins Git-Repository aufnehmen.
+# Bestellanfragen und Kontaktnachrichten vom Server.
+# ACHTUNG: enthält Namen und Postadressen. Niemals ins Repository aufnehmen.
 app-data/
 
-# Zugangsdaten für das Deployment
+# Zugangsdaten für das Hochladen. Enthält ein Passwort im Klartext.
 sftp.env
 
 # Betriebssystem und Editoren
@@ -19,8 +20,3 @@ Thumbs.db
 *.log
 .idea/
 .vscode/
-
-# Entwicklungs-Inhaltsordner (siehe scripts/init.mjs).
-# Mit fuehrendem Schraegstrich: sonst waere auch scripts/templates/home/
-# ausgenommen, und das Werkzeug kaeme ohne seine Vorlagen.
-/home/
