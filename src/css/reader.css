@@ -84,6 +84,48 @@ body.is-reader {
   }
 }
 
+/*
+ * Auf dem Telefon sind die deutschen Beschriftungen zu lang für eine Zeile.
+ * Deshalb bekommt die Leseansicht kürzere Wörter ("Bestellen" statt
+ * "Druckausgabe bestellen"), der Name neben dem Pfeil entfällt, und die
+ * Bedienelemente werden kompakter. Die Seite bekommt so keinen waagrechten
+ * Bildlauf — das war vorher der Fall, und Teilen und Bestellen lagen
+ * ausserhalb des Bildschirms.
+ */
+@media (max-width: 30rem) {
+  .reader__bar {
+    gap: var(--space-2);
+    padding-inline: var(--space-4);
+  }
+
+  .reader__close-text {
+    /* Der Pfeil allein genügt; der Name steht im aria-label. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .reader__tools {
+    min-width: 0;
+    /* Letzte Sicherung bei sehr grossen Schriftgrössen. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .reader__tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .reader__tool {
+    padding: 0.5em 0.7em;
+    font-size: var(--text-xs);
+  }
+
+}
+
 /* Ohne JavaScript: alle Seiten untereinander. */
 .reader__stage {
   flex: 1;

@@ -180,6 +180,16 @@ export function loadConfig(options = {}) {
     fail('archive.perPage in config/site.json muss eine ganze Zahl grösser 0 sein.');
   }
 
+  // Nummern, die es einmal gab und die nie öffentlich waren. Sie dürfen
+  // fehlen, ohne dass npm run check das als gebrochene Adresse meldet.
+  const retiredFlyerIds = raw.retiredFlyerIds ?? [];
+  if (!Array.isArray(retiredFlyerIds) || retiredFlyerIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    fail(
+      'retiredFlyerIds in config/site.json muss eine Liste positiver ganzer Zahlen sein.',
+      'Beispiel:  "retiredFlyerIds": [199, 200]',
+    );
+  }
+
   const canonicalDomain = raw.canonicalDomain ?? null;
   const host = new URL(parsedBase.origin).hostname;
   const isCanonical = Boolean(
@@ -207,6 +217,7 @@ export function loadConfig(options = {}) {
     activeLanguages,
     languageCodes,
     defaultLanguage,
+    retiredFlyerIds,
     urls,
     /** Ist diese Sprache aktiv? */
     hasLanguage: (code) => languageCodes.includes(code),

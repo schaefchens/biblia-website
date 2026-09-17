@@ -102,6 +102,14 @@ export function layout(ctx, page) {
         <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf7f2" />
         <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14110f" />
 
+        ${ctx.assets.icons
+          ? html`
+              <link rel="icon" href="${ctx.assets.icons.svg}" type="image/svg+xml" />
+              <link rel="icon" href="${ctx.assets.icons.png32}" sizes="32x32" type="image/png" />
+              <link rel="apple-touch-icon" href="${ctx.assets.icons.appleTouch}" />
+            `
+          : null}
+
         <link rel="stylesheet" href="${ctx.assets.css}" />
         ${ctx.assets.preloadFonts?.map(
           (href) =>

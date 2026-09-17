@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DIR } from './paths.mjs';
+import { buildCatalog } from './catalog.mjs';
 
 /** Alle PHP-Dateien unterhalb von server/api. */
 function listPhpFiles(dir, prefix = '') {
@@ -40,9 +41,10 @@ function toPhp(value, indent = '  ') {
  * @param {object} options
  * @param {import('./emit.mjs').Emitter} options.emitter
  * @param {object} options.config
+ * @param {object} options.content
  * @param {object} options.assets
  */
-export function buildServerFiles({ emitter, config, assets }) {
+export function buildServerFiles({ emitter, config, content, assets }) {
   const apiDir = path.join(DIR.server, 'api');
   for (const file of listPhpFiles(apiDir)) {
     emitter.copy(`api/${file}`, path.join(apiDir, file));
@@ -82,6 +84,29 @@ export function buildServerFiles({ emitter, config, assets }) {
     ].join('\n'),
   );
 
+  // Der bestellbare Bestand. Der Endpunkt nimmt ausschliesslich an, was
+  // hier steht — Nummer, Verfügbarkeit und erlaubte Menge.
+  const catalog = buildCatalog({ config, content });
+  emitter.add(
+    'api/catalog.generated.php',
+    [
+      '<?php',
+      '',
+      '/**',
+      ' * Diese Datei wird beim Build erzeugt. Änderungen hier gehen verloren.',
+      ' * Quelle: content/flyers/ und scripts/lib/catalog.mjs',
+      ' *',
+      ' * Sie ist die einzige gültige Liste bestellbarer Flyer. Alles, was der',
+      ' * Browser mitschickt, wird dagegen geprüft.',
+      ' */',
+      '',
+      'declare(strict_types=1);',
+      '',
+      `return ${toPhp(catalog)};`,
+      '',
+    ].join('\n'),
+  );
+
   // Laufzeitdaten sperren. Bestell- und Kontaktdaten enthalten Namen und
   // Postadressen und dürfen unter keinen Umständen abrufbar sein.
   // Nach jedem Hochladen wird zusätzlich über HTTP geprüft, dass hier
@@ -116,5 +141,5 @@ export function buildServerFiles({ emitter, config, assets }) {
   // Verzeichnisauflistung zusätzlich verhindern, falls .htaccess ignoriert wird.
   emitter.add('app-data/index.html', '<!doctype html>\n<title>403</title>\n');
 
-  return { files: listPhpFiles(apiDir).length };
+  return { files: listPhpFiles(apiDir).length, catalog };
 }

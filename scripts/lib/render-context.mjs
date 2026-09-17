@@ -31,8 +31,7 @@ export function createContext({ config, content, i18n, assets, media = null }) {
   const taxonomyLanguages = (item) =>
     config.languageCodes.filter(
       (code) =>
-        Boolean(item.languages[code]) &&
-        item.flyers.some((flyer) => flyer.status === 'published' && flyer.languages[code]),
+        Boolean(item.languages[code]) && item.flyers.some((flyer) => content.isListed(flyer, code)),
     );
 
   /** Sprachen, in denen es diese redaktionelle Seite mit Titel gibt. */

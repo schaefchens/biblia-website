@@ -125,6 +125,20 @@ main {
     padding-bottom: 2px;
   }
 
+  /* Auf dem Telefon wird mit dem Finger getroffen, nicht mit dem Zeiger.
+     Die Fläche wird deshalb auf die üblichen 44 Bildpunkte gebracht —
+     sichtbar ändert sich nichts, der Text bleibt gleich gross. */
+  .site-nav__link,
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  .site-nav__list {
+    gap: var(--space-4);
+  }
+
   .site-nav::-webkit-scrollbar {
     display: none;
   }

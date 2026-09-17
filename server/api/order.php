@@ -19,6 +19,7 @@ require_once __DIR__ . '/_lib/config.php';
 require_once __DIR__ . '/_lib/guard.php';
 require_once __DIR__ . '/_lib/ratelimit.php';
 require_once __DIR__ . '/_lib/validate.php';
+require_once __DIR__ . '/_lib/catalog.php';
 require_once __DIR__ . '/_lib/store.php';
 require_once __DIR__ . '/_lib/mailer.php';
 require_once __DIR__ . '/_lib/respond.php';
@@ -38,6 +39,7 @@ $texts = [
         'rateLimit' => 'Es wurden zu viele Anfragen gesendet. Bitte versuche es in einigen Minuten erneut.',
         'validation' => 'Bitte prüfe die markierten Felder.',
         'empty' => 'Es wurden keine Flyer ausgewählt.',
+        'catalog' => 'Die Bestellung ist gerade nicht möglich. Bitte später noch einmal versuchen.',
         'method' => 'Diese Adresse nimmt nur abgeschickte Formulare entgegen.',
     ],
     'en' => [
@@ -48,6 +50,7 @@ $texts = [
         'rateLimit' => 'Too many requests were sent. Please try again in a few minutes.',
         'validation' => 'Please check the highlighted fields.',
         'empty' => 'No leaflets were selected.',
+        'catalog' => 'Ordering is not possible right now. Please try again later.',
         'method' => 'This address only accepts submitted forms.',
     ],
 ];
@@ -93,9 +96,24 @@ $result = biblia_validate(
     $language,
 );
 
-$items = biblia_parse_items($_POST['items'] ?? '');
+// Ohne Bestand lässt sich nichts prüfen. Dann lieber gar keine Bestellung
+// annehmen als eine, die niemand zuordnen kann.
+$catalog = biblia_catalog();
+if ($catalog === []) {
+    biblia_wants_json()
+        ? biblia_json(500, ['ok' => false, 'error' => 'catalog'])
+        : biblia_page(500, $language, $text['errorTitle'], $text['catalog']);
+}
+
+$parsed = biblia_parse_items($_POST['items'] ?? '', $catalog, $language);
+$items = $parsed['items'];
 if ($items === []) {
     $result['errors']['items'] = biblia_messages($language)['items'];
+} elseif ($parsed['rejected'] > 0) {
+    // Ein Flyer aus der Auswahl wird nicht mehr aufgelegt. Stillschweigend
+    // wegzulassen wäre falsch — die Bestellung wäre dann eine andere als
+    // die abgeschickte.
+    $result['errors']['items'] = biblia_messages($language)['itemsUnavailable'];
 }
 
 if ($result['errors'] !== []) {
@@ -132,7 +150,9 @@ $lines[] = 'Sprache: ' . $language;
 $lines[] = '';
 $lines[] = 'Flyer:';
 foreach ($items as $item) {
-    $lines[] = sprintf('  %dx Flyer Nr. %d', $item['quantity'], $item['id']);
+    $lines[] = $item['title'] === ''
+        ? sprintf('  %dx Flyer Nr. %d', $item['quantity'], $item['id'])
+        : sprintf('  %dx Flyer Nr. %d — %s', $item['quantity'], $item['id'], $item['title']);
 }
 $lines[] = '';
 $lines[] = 'Anschrift:';

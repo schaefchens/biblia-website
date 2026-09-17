@@ -40,6 +40,7 @@ export function orderPage(ctx, lang) {
           data-selection-list
           data-label-quantity="${t('selection.quantity')}"
           data-label-remove="${t('selection.remove')}"
+          data-max-quantity="${ctx.config.order?.defaultMaxQuantity ?? 100}"
           hidden
         ></ul>
       </section>

@@ -31,7 +31,9 @@
     "shareWhatsapp": "Share on WhatsApp",
     "shareImage": "Share image",
     "back": "Back",
-    "more": "More"
+    "more": "More",
+    "orderShort": "Order",
+    "inSelectionShort": "Selected"
   },
   "flyer": {
     "pagesOne": "{n} page",
@@ -47,7 +49,9 @@
     "archived": "This leaflet is no longer being reprinted. The reading view stays available permanently.",
     "cover": "Cover of {title}",
     "page": "Page {n} of {title}",
-    "textNotice": "This text was read automatically from the print file when the site was built. The printed edition is always authoritative."
+    "textNotice": "This text was read automatically from the print file when the site was built. The printed edition is always authoritative.",
+    "textManual": "This text was entered by hand because the print file cannot be read automatically. The printed edition always takes precedence.",
+    "textEmpty": "No text could be read from this print file — it most likely consists of images. The reading view shows the complete leaflet."
   },
   "reader": {
     "open": "Reading view",

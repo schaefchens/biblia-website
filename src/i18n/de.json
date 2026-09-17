@@ -31,7 +31,9 @@
     "shareWhatsapp": "Auf WhatsApp teilen",
     "shareImage": "Bild teilen",
     "back": "Zurück",
-    "more": "Mehr"
+    "more": "Mehr",
+    "orderShort": "Bestellen",
+    "inSelectionShort": "Ausgewählt"
   },
   "flyer": {
     "pagesOne": "{n} Seite",
@@ -47,7 +49,9 @@
     "archived": "Dieser Flyer wird nicht mehr neu aufgelegt. Die Leseansicht bleibt dauerhaft erreichbar.",
     "cover": "Titelseite von {title}",
     "page": "Seite {n} von {title}",
-    "textNotice": "Dieser Text wurde beim Erstellen der Website automatisch aus der Druckdatei gelesen. Maßgeblich ist immer die gedruckte Ausgabe."
+    "textNotice": "Dieser Text wurde beim Erstellen der Website automatisch aus der Druckdatei gelesen. Maßgeblich ist immer die gedruckte Ausgabe.",
+    "textManual": "Dieser Text wurde von Hand erfasst, weil sich die Druckdatei nicht auslesen lässt. Maßgeblich ist immer die gedruckte Ausgabe.",
+    "textEmpty": "Aus dieser Druckdatei liess sich kein Text auslesen — sie besteht vermutlich aus Bildern. Die Leseansicht zeigt den vollständigen Flyer."
   },
   "reader": {
     "open": "Leseansicht",

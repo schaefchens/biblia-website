@@ -14,7 +14,7 @@ import path from 'node:path';
 import { DIR, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadDeployConfig, connect, ensureDirectory } from './lib/sftp.mjs';
-import { blank, color, heading, info, ok, plural, runMain, step, warn } from './lib/log.mjs';
+import { blank, color, heading, info, ok, plural, runMain, step, warn, error } from './lib/log.mjs';
 
 const args = process.argv.slice(2);
 const archive = args.includes('--archive');
@@ -39,6 +39,10 @@ runMain(async () => {
   const client = await connect(deploy);
   let total = 0;
   let skipped = 0;
+  // Ein fehlgeschlagenes Verschieben darf nicht als Erfolg durchgehen:
+  // sonst bleibt der Eintrag im Eingang liegen und wirkt beim nächsten
+  // Lauf wie ein neuer.
+  const failures = [];
 
   try {
     for (const kind of KINDS) {
@@ -87,10 +91,16 @@ runMain(async () => {
       if (archive && files.length > 0) {
         const archiveDir = `${remoteDir}/archiv`;
         await ensureDirectory(client, archiveDir);
+        let moved = 0;
         for (const name of files) {
-          await client.rename(`${remoteDir}/${name}`, `${archiveDir}/${name}`).catch(() => {});
+          try {
+            await client.rename(`${remoteDir}/${name}`, `${archiveDir}/${name}`);
+            moved += 1;
+          } catch (err) {
+            failures.push(`${kind.label}: ${name} (${err.message})`);
+          }
         }
-        info(color.gray(`    Auf dem Server nach archiv/ verschoben.`));
+        if (moved > 0) info(color.gray(`    ${plural(moved, 'Eintrag', 'Einträge')} auf dem Server nach archiv/ verschoben.`));
       }
     }
   } finally {
@@ -106,6 +116,17 @@ runMain(async () => {
   warn('Diese Dateien enthalten Namen und Postadressen.');
   info(color.gray(`    Sie liegen in ${rel(DIR.appData)} und sind von Git ausgenommen.`));
   info(color.gray('    Bitte nicht per E-Mail weitergeben und nicht in geteilte Ordner kopieren.'));
+  info(color.gray('    Aufbewahrungsfristen anwenden:  npm run retention'));
+
+  if (failures.length > 0) {
+    blank();
+    error(plural(failures.length, 'Eintrag konnte auf dem Server nicht verschoben werden', 'Einträge konnten auf dem Server nicht verschoben werden'));
+    for (const failure of failures) info(color.gray(`    ${failure}`));
+    info('Die Einträge liegen weiterhin im Eingang. Der Vorgang lässt sich gefahrlos wiederholen.');
+    blank();
+    return 1;
+  }
+
   blank();
   return 0;
 });

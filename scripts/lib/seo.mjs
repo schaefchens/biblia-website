@@ -7,6 +7,11 @@
  */
 import { escapeHtml } from './html.mjs';
 
+/** Zeichen mit Sonderbedeutung in einem regulären Ausdruck entschärfen. */
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** XML-Sitemap aus den gesammelten Einträgen. */
 export function renderSitemap(config, entries) {
   const lines = [
@@ -144,11 +149,17 @@ export function renderHtaccess(config, { redirects = [], cspHashes = [] }) {
 
   if (redirects.length > 0) {
     lines.push('');
-    lines.push('# Frühere Adressen. Gedruckte QR-Codes und geteilte Links müssen');
+    lines.push('# Frühere Adressen. Geteilte Links und Suchergebnisse müssen');
     lines.push('# dauerhaft funktionieren, auch wenn sich ein Name ändert.');
+    lines.push('#');
+    lines.push('# RedirectMatch statt Redirect: Redirect wirkt als Präfix und würde');
+    lines.push('# auch /de/flyer/alt/irgendwas umleiten. Das $ begrenzt die Regel');
+    lines.push('# auf genau diese eine Adresse.');
+    lines.push('<IfModule mod_alias.c>');
     for (const redirect of redirects) {
-      lines.push(`Redirect 301 ${redirect.from} ${redirect.to}`);
+      lines.push(`  RedirectMatch 301 "^${escapeRegex(redirect.from.replace(/\/$/, ''))}/?$" "${redirect.to}"`);
     }
+    lines.push('</IfModule>');
   }
 
   return `${lines.join('\n')}\n`;

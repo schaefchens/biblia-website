@@ -18,6 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { ROOT } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadContent } from './lib/content.mjs';
+import { applyReleaseChecks } from './lib/release.mjs';
 import { build } from './build.mjs';
 import {
   blank, color, error, formatDuration, heading, info, ok, plural, runMain, step, warn, fail,
@@ -118,10 +119,35 @@ runMain(async () => {
   // --- 1. Prüfen ---
   step('Inhalte prüfen');
   const content = loadContent(config);
+  // Unter der endgültigen Domain zählen Beispielinhalte, Platzhalter im
+  // Impressum und unzustellbare Adressen als Fehler. Was einmal
+  // veröffentlicht ist, steht in Suchmaschinen und auf gedruckten Flyern.
+  const release = applyReleaseChecks({ config, content });
   const errors = content.issues.errors;
   const warnings = content.issues.warnings;
 
   info(color.gray(`    ${plural(content.flyers.length, 'Flyer geprüft', 'Flyer geprüft')}`));
+  if (release.level === 'error' && release.problems.length > 0) {
+    blank();
+    error(
+      `${plural(release.problems.length, 'Punkt verhindert', 'Punkte verhindern')} die Veröffentlichung unter ${config.canonicalDomain}.`,
+    );
+    for (const problem of release.problems) {
+      info(`${color.bold(problem.subject)}: ${problem.message}`);
+      if (problem.hint) info(color.gray(`    ${problem.hint}`));
+    }
+    blank();
+    info('Es wurde nichts verändert und nichts hochgeladen.');
+    blank();
+    return 1;
+  }
+  if (release.level === 'warning' && release.problems.length > 0) {
+    info(
+      color.gray(
+        `    ${plural(release.problems.length, 'Punkt ist', 'Punkte sind')} vor dem Umzug auf die endgültige Domain zu erledigen — npm run check zeigt sie.`,
+      ),
+    );
+  }
   if (errors.length > 0) {
     blank();
     error(plural(errors.length, 'Fehler im Inhalt', 'Fehler im Inhalt'));

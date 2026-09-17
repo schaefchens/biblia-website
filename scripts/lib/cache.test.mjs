@@ -12,6 +12,37 @@ test('Gleicher Schlüssel, unabhängig von der Reihenfolge der Angaben', () => {
   assert.notEqual(hashKey({ a: 1 }), hashKey({ a: 2 }));
 });
 
+test('Verschachtelte Angaben gehören zum Schlüssel', () => {
+  // Eine geänderte Bildqualität oder ein anderer Ausschnitt muss die
+  // Bilder neu erzeugen. Bleibt der Schlüssel gleich, liefert der
+  // Zwischenspeicher stillschweigend die alten Bilder weiter.
+  assert.notEqual(
+    hashKey({ step: 'cover', quality: { webp: 78, avif: 55 } }),
+    hashKey({ step: 'cover', quality: { webp: 40, avif: 55 } }),
+  );
+  assert.notEqual(
+    hashKey({ step: 'cover', crop: { x: 0, y: 0, width: 1, height: 1 } }),
+    hashKey({ step: 'cover', crop: { x: 0.6667, y: 0, width: 0.3333, height: 1 } }),
+  );
+  assert.notEqual(hashKey({ a: { b: { c: 1 } } }), hashKey({ a: { b: { c: 2 } } }));
+});
+
+test('Verschachtelte Angaben sind trotzdem reihenfolgeunabhängig', () => {
+  assert.equal(
+    hashKey({ a: { x: 1, y: 2 }, b: [1, 2] }),
+    hashKey({ b: [1, 2], a: { y: 2, x: 1 } }),
+  );
+});
+
+test('Die Reihenfolge einer Liste zählt', () => {
+  assert.notEqual(hashKey({ widths: [640, 960] }), hashKey({ widths: [960, 640] }));
+});
+
+test('Fehlende und leere Angaben werden unterschieden', () => {
+  assert.notEqual(hashKey({ crop: null }), hashKey({ crop: {} }));
+  assert.equal(hashKey({ crop: null }), hashKey({ crop: undefined }));
+});
+
 test('Zweiter Aufruf kommt aus dem Zwischenspeicher', async () => {
   const cache = new Cache(tmp());
   let runs = 0;

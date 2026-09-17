@@ -23,9 +23,15 @@ import { isProtectedPath } from './emit.mjs';
 export const SENTINEL_FILE = '.biblia-site';
 export const MANIFEST_FILE = '.biblia-manifest.json';
 
-/** Liest und prüft die Zugangsdaten. */
-export function loadDeployConfig({ remoteRootOverride = null } = {}) {
-  const env = readEnvFile(FILE.sftpEnv);
+/**
+ * Liest und prüft die Zugangsdaten.
+ *
+ * @param {object} [options]
+ * @param {string} [options.remoteRootOverride] Anderes Zielverzeichnis
+ * @param {object} [options.env] Ersetzt den Inhalt von sftp.env (wird von den Tests genutzt)
+ */
+export function loadDeployConfig({ remoteRootOverride = null, env: envOverride = null } = {}) {
+  const env = envOverride ?? readEnvFile(FILE.sftpEnv);
 
   const missing = ['SFTP_HOST', 'SFTP_USER', 'SFTP_PASSWORD', 'SFTP_REMOTE_ROOT'].filter(
     (key) => !env[key],

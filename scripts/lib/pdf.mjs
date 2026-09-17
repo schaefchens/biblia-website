@@ -97,15 +97,25 @@ async function openDocument(file) {
  * @param {string} file
  * @param {object} options
  * @param {number} options.renderWidth  Breite in Bildpunkten
+ * @param {number} [options.onlyPage]   Nur diese eine Seite zeichnen
  * @param {(page:{index:number,width:number,height:number,png:Buffer,text:string})=>Promise<void>} onPage
  */
-export async function renderPdf(file, { renderWidth }, onPage) {
+export async function renderPdf(file, { renderWidth, onlyPage = null }, onPage) {
   const { document, task } = await openDocument(file);
   const factory = new NodeCanvasFactory();
   const pages = [];
 
+  if (onlyPage !== null && (onlyPage < 1 || onlyPage > document.numPages)) {
+    await task.destroy().catch(() => {});
+    throw new PdfError(
+      `Die PDF-Datei hat keine Seite ${onlyPage} (sie hat ${document.numPages}).`,
+      'Prüfe die Angabe "cover.page" in flyer.md.',
+    );
+  }
+
   try {
     for (let index = 1; index <= document.numPages; index += 1) {
+      if (onlyPage !== null && index !== onlyPage) continue;
       const page = await document.getPage(index);
       try {
         const natural = page.getViewport({ scale: 1 });
@@ -164,4 +174,19 @@ export async function renderPdf(file, { renderWidth }, onPage) {
   }
 
   return pages;
+}
+
+/**
+ * Zeichnet genau eine Seite und liefert sie als PNG.
+ * Wird für Titelbilder gebraucht, deren Vorlage nicht die erste Seite ist.
+ */
+export async function renderPdfPage(file, { renderWidth, page }) {
+  let png = null;
+  await renderPdf(file, { renderWidth, onlyPage: page }, async (rendered) => {
+    png = rendered.png;
+  });
+  if (!png) {
+    throw new PdfError(`Die Seite ${page} konnte nicht gezeichnet werden.`);
+  }
+  return png;
 }

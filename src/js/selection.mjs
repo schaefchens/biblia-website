@@ -7,6 +7,26 @@
  */
 const STORAGE_KEY = 'biblia:selection';
 
+/**
+ * Grenzen der Mengenangabe.
+ *
+ * Sie stehen in flyer.md und kommen über die Seite hierher. Der Server
+ * prüft dieselben Grenzen noch einmal gegen den erzeugten Bestand — hier
+ * geht es allein darum, dass niemand versehentlich etwas einträgt, das
+ * anschliessend zurückgewiesen wird.
+ */
+const limits = { min: 1, max: 100 };
+
+const asCount = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+
+/** Begrenzt eine Menge auf das, was für diesen Flyer erlaubt ist. */
+function clamp(quantity, item = null) {
+  const min = asCount(item?.min) ?? limits.min;
+  const max = Math.max(min, asCount(item?.max) ?? limits.max);
+  const wanted = Number.isFinite(quantity) ? Math.round(quantity) : min;
+  return Math.min(Math.max(wanted, min), max);
+}
+
 function read() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -15,12 +35,17 @@ function read() {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((item) => item && Number.isInteger(item.id) && typeof item.title === 'string')
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        slug: typeof item.slug === 'string' ? item.slug : '',
-        quantity: Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
-      }));
+      .map((item) => {
+        const entry = {
+          id: item.id,
+          title: item.title,
+          slug: typeof item.slug === 'string' ? item.slug : '',
+          min: asCount(item.min),
+          max: asCount(item.max),
+        };
+        entry.quantity = clamp(item.quantity, entry);
+        return entry;
+      });
   } catch {
     return [];
   }
@@ -49,8 +74,8 @@ export const selection = {
   add(item) {
     const items = read();
     const existing = items.find((entry) => entry.id === item.id);
-    if (existing) existing.quantity += 1;
-    else items.push({ ...item, quantity: 1 });
+    if (existing) existing.quantity = clamp(existing.quantity + 1, existing);
+    else items.push({ ...item, quantity: clamp(asCount(item.min) ?? limits.min, item) });
     write(items);
   },
   remove(id) {
@@ -60,7 +85,7 @@ export const selection = {
     const items = read();
     const entry = items.find((item) => item.id === id);
     if (!entry) return;
-    entry.quantity = Math.max(1, Math.min(999, quantity));
+    entry.quantity = clamp(quantity, entry);
     write(items);
   },
   clear() {
@@ -90,6 +115,8 @@ function initButtons() {
     const id = Number(button.dataset.selectFlyer);
     const title = button.dataset.selectTitle ?? '';
     const slug = button.dataset.selectSlug ?? '';
+    const min = asCount(Number(button.dataset.selectMin));
+    const max = asCount(Number(button.dataset.selectMax));
     const original = button.textContent.trim();
     const added = button.dataset.selectAdded ?? original;
 
@@ -101,7 +128,7 @@ function initButtons() {
 
     button.addEventListener('click', () => {
       if (selection.has(id)) selection.remove(id);
-      else selection.add({ id, title, slug });
+      else selection.add({ id, title, slug, min, max });
       refresh();
     });
 
@@ -139,10 +166,14 @@ function initList() {
       quantityLabel.className = 'selection__quantity';
       quantityLabel.textContent = labels.quantity;
 
+      const itemMin = item.min ?? limits.min;
+      const itemMax = Math.max(itemMin, item.max ?? limits.max);
+
       const quantity = document.createElement('input');
       quantity.type = 'number';
-      quantity.min = '1';
-      quantity.max = '999';
+      quantity.min = String(itemMin);
+      quantity.max = String(itemMax);
+      quantity.step = '1';
       quantity.value = String(item.quantity);
       quantity.inputMode = 'numeric';
       quantity.addEventListener('change', () => {
@@ -169,6 +200,12 @@ function initList() {
 }
 
 export function initSelection() {
+  // Rückfallgrenze zuerst: Einträge, die vor dieser Fassung ausgewählt
+  // wurden, bringen noch keine eigenen Grenzen mit — und der Zähler in der
+  // Kopfzeile liest die Auswahl sofort.
+  const fallback = document.querySelector('[data-selection-list]')?.dataset.maxQuantity;
+  limits.max = asCount(Number(fallback)) ?? limits.max;
+
   initBadge();
   initButtons();
   initList();

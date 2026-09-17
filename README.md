@@ -43,6 +43,7 @@ content/flyers/123-hoffnung/
 ├── flyer.md        Angaben, die für alle Sprachen gelten
 ├── flyer.de.md     Titel und Beschreibung auf Deutsch
 ├── flyer.de.pdf    Die Druckdatei
+├── flyer.de.txt    Nur bei Bedarf: der Text von Hand (siehe unten)
 ├── flyer.en.md     Titel und Beschreibung auf Englisch
 └── flyer.en.pdf
 ```
@@ -86,7 +87,13 @@ Hier kann ein längerer Text stehen. Er erscheint auf der Detailseite.
 * **Die Nummer (`id`) darf nie geändert werden.** Sie steht in den gedruckten
   QR-Codes, und die bleiben jahrelang im Umlauf. Titel und `slug` dürfen
   geändert werden — `npm run check -- --fix` legt dann automatisch eine
-  Weiterleitung an.
+  Weiterleitung an, und der Build schreibt sie in die `.htaccess`.
+* **Einen Flyer nie löschen.** Soll er nicht mehr erscheinen, genügt
+  `status: archived`: er verschwindet aus Übersicht und Suche, bleibt aber
+  unter seiner Adresse lesbar. `npm run check` meldet jede Nummer, die es
+  einmal gab und heute nicht mehr gibt. War eine Nummer nie im Umlauf — etwa
+  ein Versuch beim Ausprobieren —, kann sie in `config/site.json` unter
+  `"retiredFlyerIds": [199]` eingetragen werden; dann schweigt die Prüfung.
 * **Werte mit Doppelpunkt gehören in Anführungszeichen:**
   `title: "Wer ist Jesus: der Weg"`
 * **Keine Tabulatoren** in den Textdateien, nur Leerzeichen.
@@ -174,6 +181,10 @@ Die Kurzadressen sind das, was auf gedruckten Flyern steht. Sie zeigen den
 vollständigen Inhalt — nicht nur eine Weiterleitung —, damit ein geteilter
 Link in WhatsApp oder Signal auch ein Vorschaubild bekommt.
 
+Wird ein Flyer umbenannt, bleibt seine frühere lesbare Adresse dauerhaft
+erreichbar: `npm run check -- --fix` trägt den alten Namen in `slug_history`
+ein, und jeder Build erzeugt daraus eine Weiterleitung in der `.htaccess`.
+
 ### Bilder
 
 Aus jeder PDF-Datei entstehen beim Erzeugen automatisch: Titelbild,
@@ -189,9 +200,21 @@ dessen Titel das rechte Drittel ist —, lässt sich das in `flyer.md` angeben:
 
 ```yaml
 cover:
-  page: 1
+  page: 3
   crop: { x: 0.6667, y: 0, width: 0.3333, height: 1 }
 ```
+
+### Wenn sich aus der PDF kein Text lesen lässt
+
+Aus einem Scan oder einer PDF, die nur aus Bildern besteht, lässt sich kein
+Text auslesen. Die Seite „Als Text lesen“ wäre dann leer — `npm run check`
+meldet das. In diesem Fall den Text in eine Datei neben die PDF legen:
+
+```
+content/flyers/123-hoffnung/flyer.de.txt
+```
+
+Sie ersetzt die automatische Fassung vollständig. Leerzeilen trennen Absätze.
 
 ---
 
@@ -207,6 +230,19 @@ Für den Umzug genügt es, in `config/site.json` die `baseUrl` zu ändern und
 `npm run publish` auszuführen. Alle Adressen, QR-Codes und Verweise werden
 dabei neu erzeugt.
 
+Sobald die endgültige Domain eingetragen ist, wird streng geprüft. Solange
+einer dieser Punkte offen ist, wird weder gebaut noch hochgeladen:
+
+* Es sind noch Beispielinhalte vorhanden (`demo: true`) — entfernen mit
+  `npm run demo -- --remove`.
+* Impressum oder Datenschutz enthalten noch Platzhalter.
+* Eine der Empfängeradressen in `config/site.json` ist nicht zustellbar,
+  etwa `bestellung@example.invalid`.
+* Es ist kein einziger Flyer veröffentlicht.
+
+`npm run check` zeigt diese Punkte schon vorher an — auf der Testadresse
+als Hinweis, danach als Fehler.
+
 ---
 
 ## Datenschutz
@@ -219,10 +255,14 @@ Bestellanfragen und Kontaktnachrichten enthalten **Namen und Postadressen**.
 * `npm run fetch` holt sie nach `app-data/` auf diesen Rechner. Dieser Ordner
   ist von Git ausgenommen und darf **niemals** in ein Repository, in einen
   geteilten Ordner oder in eine E-Mail gelangen.
-* `npm run retention` löscht abgelaufene Einträge — lokal und auf dem Server.
+* `npm run retention` löscht abgelaufene Einträge — lokal und auf dem Server,
+  einschliesslich des Archivs, in das `npm run fetch -- --archive` verschiebt.
   Die Fristen stehen in `config/site.json`.
 * Verlangt jemand die Löschung seiner Daten:
   `npm run retention -- --person "name@beispiel.at"`
+* Konnte etwas nicht gelöscht werden, endet der Befehl mit einer Fehlermeldung
+  und listet auf, was übrig ist. Erst wenn er ohne Fehler durchläuft, ist die
+  Löschung wirklich erfolgt.
 * Die Website bindet nichts von fremden Servern ein: keine Schriften von
   Google, keine Karten, keine Statistik. Deshalb braucht sie **kein
   Einwilligungsbanner**. Das sollte so bleiben.

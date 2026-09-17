@@ -18,10 +18,12 @@
   --paper-raised: #ffffff;
   --paper-sunken: #f3efe8;
 
-  /* Text */
+  /* Text.
+     Auch --ink-subtle steht auf hellem und auf vertieftem Grund über 4.5:1
+     und ist damit für Fließtext geeignet. */
   --ink: #1c1917;
   --ink-muted: #6b635c;
-  --ink-subtle: #948b83;
+  --ink-subtle: #736a63;
   --ink-inverse: #faf7f2;
 
   /* Akzent */
@@ -112,7 +114,7 @@
 
     --ink: #f5efe7;
     --ink-muted: #a89e93;
-    --ink-subtle: #7d746b;
+    --ink-subtle: #8d8379;
     --ink-inverse: #14110f;
 
     --accent: #d4826a;
@@ -141,7 +143,7 @@
 
   --ink: #f5efe7;
   --ink-muted: #a89e93;
-  --ink-subtle: #7d746b;
+  --ink-subtle: #8d8379;
   --ink-inverse: #14110f;
 
   --accent: #d4826a;

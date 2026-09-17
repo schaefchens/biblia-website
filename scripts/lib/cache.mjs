@@ -15,13 +15,38 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 /** Version der Pipeline. Erhöhen, wenn sich die Erzeugung ändert. */
-export const PIPELINE_VERSION = 1;
+export const PIPELINE_VERSION = 2;
+
+/**
+ * Stabile Textdarstellung beliebiger Daten — Objektschlüssel werden auf
+ * jeder Ebene sortiert.
+ *
+ * Bewusst nicht JSON.stringify(parts, keys): der zweite Parameter ist eine
+ * Auswahlliste, die auf ALLEN Ebenen gilt. Verschachtelte Angaben wie
+ * { quality: { webp: 78 } } oder { crop: { x: 0.6 } } fielen dabei heraus,
+ * und der Schlüssel blieb trotz geänderter Einstellung derselbe — der
+ * Zwischenspeicher hätte veraltete Bilder weiterverwendet.
+ */
+export function stableString(value) {
+  if (value === null || value === undefined) return 'null';
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (Array.isArray(value)) return `[${value.map(stableString).join(',')}]`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableString(value[key])}`).join(',')}}`;
+  }
+  if (typeof value === 'bigint') return `${value}n`;
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    throw new Error(`Nicht abbildbarer Wert im Zwischenspeicher-Schlüssel: ${String(value)}`);
+  }
+  return JSON.stringify(value);
+}
 
 /** Stabiler Hash über beliebige Daten — Schlüssel werden sortiert. */
 export function hashKey(parts) {
   const hash = crypto.createHash('sha256');
   hash.update(String(PIPELINE_VERSION));
-  hash.update(JSON.stringify(parts, Object.keys(parts).sort()));
+  hash.update(stableString(parts));
   return hash.digest('hex').slice(0, 24);
 }
 

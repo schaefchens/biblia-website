@@ -16,6 +16,10 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const FLYER_DIR = /^(\d+)-([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const STATUS = ['draft', 'published', 'archived'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const CURRENCY = /^[A-Z]{3}$/;
+
+/** Obergrenze für jede Mengenangabe — schützt auch den PHP-Endpunkt. */
+export const MAX_ORDER_QUANTITY = 1000;
 
 /** Verzeichnisse alphabetisch — sorgt für reproduzierbare Builds. */
 function listDirectories(dir) {
@@ -36,16 +40,49 @@ function listFiles(dir) {
     .sort();
 }
 
-/** Ein Datum als Text, oder null. YAML wandelt Datumsangaben in Date-Objekte um. */
-function normalizeDate(value) {
-  if (!value) return null;
+/** Gibt es diesen Tag wirklich? Fängt 2026-02-30 und 2026-13-01 ab. */
+function isRealDate(text) {
+  const [year, month, day] = text.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+/**
+ * Ein Datum als Text, oder null. YAML wandelt Datumsangaben in Date-Objekte um.
+ *
+ * Ein unlesbares Datum ist ein Fehler und kein stillschweigend übernommener
+ * Text: es steht in der Sitemap, bestimmt die Reihenfolge im Archiv und
+ * entscheidet bei publish_date darüber, ob ein Flyer schon sichtbar ist.
+ */
+function readDate(value, { subject, field, file, issues }) {
+  if (value === null || value === undefined || value === '') return null;
+
+  let text;
   if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      issues.error(subject, `Die Angabe "${field}" ist kein gültiges Datum.`, {
+        file,
+        hint: 'Erwartet wird ein Datum der Form 2026-08-14.',
+      });
+      return null;
+    }
     // Immer als UTC lesen, sonst verschiebt sich das Datum je nach Zeitzone
     // des Rechners um einen Tag.
-    return value.toISOString().slice(0, 10);
+    text = value.toISOString().slice(0, 10);
+  } else {
+    text = String(value).trim();
   }
-  const text = String(value).trim();
-  return DATE.test(text) ? text : text;
+
+  if (!DATE.test(text) || !isRealDate(text)) {
+    issues.error(subject, `Die Angabe "${field}" ist kein gültiges Datum: ${JSON.stringify(value)}`, {
+      file,
+      hint: 'Erwartet wird ein Datum der Form 2026-08-14 (Jahr-Monat-Tag).',
+    });
+    return null;
+  }
+  return text;
 }
 
 /** Wert als Liste von Texten, egal ob einzeln oder als Liste geschrieben. */
@@ -168,6 +205,37 @@ function readFlyerMeta(dirName, data, file, issues, config) {
     issues.error(subject, `Ungültiger Preis: ${JSON.stringify(orderRaw.price)}`, { file });
   }
 
+  const currency = String(orderRaw.currency ?? config.order.defaultCurrency).trim().toUpperCase();
+  if (!CURRENCY.test(currency)) {
+    issues.error(subject, `Ungültige Währung: ${JSON.stringify(orderRaw.currency)}`, {
+      file,
+      hint: 'Erwartet wird ein dreibuchstabiger Code wie EUR oder CHF.',
+    });
+  }
+
+  // Mengenangaben. Sie begrenzen später auch den PHP-Endpunkt — eine
+  // unsinnige Angabe hier wäre dort eine offene Tür.
+  const quantity = (raw, key, fallback) => {
+    if (raw === null || raw === undefined) return fallback;
+    if (!Number.isInteger(raw) || raw < 1 || raw > MAX_ORDER_QUANTITY) {
+      issues.error(subject, `Ungültige Angabe "order.${key}": ${JSON.stringify(raw)}`, {
+        file,
+        hint: `Erwartet wird eine ganze Zahl zwischen 1 und ${MAX_ORDER_QUANTITY}.`,
+      });
+      return fallback;
+    }
+    return raw;
+  };
+  const minQuantity = quantity(orderRaw.min_quantity, 'min_quantity', 1);
+  const maxQuantity = quantity(orderRaw.max_quantity, 'max_quantity', config.order.defaultMaxQuantity);
+  if (minQuantity > maxQuantity) {
+    issues.error(
+      subject,
+      `order.min_quantity (${minQuantity}) ist größer als order.max_quantity (${maxQuantity}).`,
+      { file },
+    );
+  }
+
   const cover = data.cover ?? {};
   if (cover.crop) {
     const c = cover.crop;
@@ -188,6 +256,8 @@ function readFlyerMeta(dirName, data, file, issues, config) {
     slugHistory,
     dirName,
     sourceFile: file,
+    /** Beispielinhalt aus "npm run demo" — darf nie in die Veröffentlichung. */
+    demo: data.demo === true,
     category: data.category ? String(data.category).trim() : null,
     topics: toList(data.topics),
     tags: toList(data.tags),
@@ -195,8 +265,8 @@ function readFlyerMeta(dirName, data, file, issues, config) {
     featured: data.featured === true,
     featuredOrder: Number.isInteger(data.featured_order) ? data.featured_order : null,
     status: STATUS.includes(status) ? status : 'draft',
-    date: normalizeDate(data.date),
-    publishDate: normalizeDate(data.publish_date),
+    date: readDate(data.date, { subject, field: 'date', file, issues }),
+    publishDate: readDate(data.publish_date, { subject, field: 'publish_date', file, issues }),
     download: data.download === true,
     cover: {
       page: Number.isInteger(cover.page) && cover.page > 0 ? cover.page : 1,
@@ -206,18 +276,16 @@ function readFlyerMeta(dirName, data, file, issues, config) {
     order: {
       enabled: orderRaw.enabled !== false && config.order.enabled,
       price: Number.isFinite(price) && price >= 0 ? price : 0,
-      currency: String(orderRaw.currency ?? config.order.defaultCurrency),
-      minQuantity: Number.isInteger(orderRaw.min_quantity) ? orderRaw.min_quantity : 1,
-      maxQuantity: Number.isInteger(orderRaw.max_quantity)
-        ? orderRaw.max_quantity
-        : config.order.defaultMaxQuantity,
+      currency: CURRENCY.test(currency) ? currency : config.order.defaultCurrency,
+      minQuantity,
+      maxQuantity: Math.max(minQuantity, maxQuantity),
     },
   };
 }
 
 /** Liest einen einzelnen Flyer. */
-function readFlyer(dirName, config, issues) {
-  const dir = path.join(DIR.flyers, dirName);
+function readFlyer(dirName, config, issues, dirs) {
+  const dir = path.join(dirs.flyers, dirName);
   const subject = dirName;
   const languageCodes = config.languageCodes;
 
@@ -280,6 +348,22 @@ function readFlyer(dirName, config, issues) {
       });
     }
 
+    // Aus gescannten PDFs lässt sich kein Text auslesen. Dann kann er als
+    // flyer.<sprache>.txt danebengelegt werden und ersetzt die automatische
+    // Fassung vollständig.
+    const textFile = path.join(dir, `flyer.${lang}.txt`);
+    let textOverride = null;
+    if (fs.existsSync(textFile)) {
+      textOverride = fs.readFileSync(textFile, 'utf8').normalize('NFC').trim();
+      if (!textOverride) {
+        issues.warning(subject, `${lang.toUpperCase()}: flyer.${lang}.txt ist leer.`, {
+          file: textFile,
+          hint: 'Entweder den Text eintragen oder die Datei löschen.',
+        });
+        textOverride = null;
+      }
+    }
+
     languages[lang] = {
       lang,
       title,
@@ -288,6 +372,8 @@ function readFlyer(dirName, config, issues) {
       body: entry.body,
       bodyHtml: renderMarkdown(entry.body, lang),
       bodyText: markdownToPlainText(entry.body, lang),
+      textOverride,
+      textFile: textOverride ? textFile : null,
       pdf,
       hasOwnPdf: Boolean(pdf),
       file: entry.file,
@@ -346,6 +432,8 @@ function readFlyer(dirName, config, issues) {
 
   return {
     ...meta,
+    // Das Kennzeichen kann in jeder der Dateien stehen.
+    demo: meta.demo || [...byLanguage.values()].some((entry) => entry.data.demo === true),
     dir,
     languages,
     availableLanguages,
@@ -397,6 +485,9 @@ function readTaxonomy(baseDir, kind, config, issues) {
     items.set(slug, {
       slug,
       kind,
+      demo:
+        shared.data.demo === true ||
+        [...byLanguage.values()].some((entry) => entry.data.demo === true),
       order: Number.isInteger(shared.data.order) ? shared.data.order : null,
       languages,
       flyers: [],
@@ -406,19 +497,19 @@ function readTaxonomy(baseDir, kind, config, issues) {
 }
 
 /** Liest die redaktionellen Seiten (Startseite, Über uns, Impressum, Datenschutz). */
-function readPages(config, issues) {
+function readPages(config, issues, dirs) {
   const pages = new Map();
-  if (!fs.existsSync(DIR.pages)) return pages;
+  if (!fs.existsSync(dirs.pages)) return pages;
 
   const names = new Set();
-  for (const file of listFiles(DIR.pages)) {
+  for (const file of listFiles(dirs.pages)) {
     const m = /^([a-z0-9-]+)(?:\.([a-z]{2}))?\.md$/.exec(file);
     if (m) names.add(m[1]);
   }
 
   for (const name of [...names].sort()) {
     const subject = `Seite ${name}`;
-    const { shared, byLanguage } = readLanguageSet(DIR.pages, name, config.languageCodes, issues, subject);
+    const { shared, byLanguage } = readLanguageSet(dirs.pages, name, config.languageCodes, issues, subject);
     const languages = {};
     for (const [lang, entry] of byLanguage) {
       languages[lang] = {
@@ -436,7 +527,14 @@ function readPages(config, issues) {
         issues.warning(subject, `${lang.toUpperCase()}: Der Titel fehlt.`, { file: entry.file });
       }
     }
-    pages.set(name, { name, data: shared.data, languages });
+    pages.set(name, {
+      name,
+      data: shared.data,
+      demo:
+        shared.data.demo === true ||
+        [...byLanguage.values()].some((entry) => entry.data.demo === true),
+      languages,
+    });
   }
   return pages;
 }
@@ -451,22 +549,26 @@ export function byDateDesc(a, b) {
 
 /**
  * Liest alle Inhalte ein.
+ *
+ * @param {object} config
+ * @param {object} [options]
+ * @param {object} [options.dirs] Andere Inhaltsverzeichnisse (wird von den Tests genutzt).
  * @returns {{ flyers, flyersById, pages, topics, categories, issues }}
  */
-export function loadContent(config) {
+export function loadContent(config, { dirs = DIR } = {}) {
   const issues = new Issues();
 
-  const categories = readTaxonomy(DIR.categories, 'kategorie', config, issues);
-  const topics = readTaxonomy(DIR.topics, 'thema', config, issues);
-  const pages = readPages(config, issues);
+  const categories = readTaxonomy(dirs.categories, 'kategorie', config, issues);
+  const topics = readTaxonomy(dirs.topics, 'thema', config, issues);
+  const pages = readPages(config, issues, dirs);
 
   const flyers = [];
   const byId = new Map();
   const bySlug = new Map();
   const historySlugs = new Map();
 
-  for (const dirName of listDirectories(DIR.flyers)) {
-    const flyer = readFlyer(dirName, config, issues);
+  for (const dirName of listDirectories(dirs.flyers)) {
+    const flyer = readFlyer(dirName, config, issues, dirs);
     if (!flyer) continue;
 
     if (byId.has(flyer.id)) {
@@ -543,20 +645,46 @@ export function loadContent(config) {
     topics,
     categories,
     issues,
+    /** Wird dieser Flyer in dieser Sprache gelistet? */
+    isListed,
+    /** Hat dieser Flyer in dieser Sprache überhaupt eine Adresse? */
+    isReachable,
+    /** Erscheint dieser Flyer irgendwo — auch sprachneutral unter /f/ID/? */
+    isPublic,
     /** Alle Flyer, die in einer Sprache tatsächlich ausgeliefert werden. */
-    published: (lang) =>
-      flyers.filter(
-        (f) => f.status === 'published' && f.languages[lang] && !isScheduled(f),
-      ),
+    published: (lang) => flyers.filter((f) => isListed(f, lang)),
     /** Flyer, die zwar nicht gelistet, aber weiterhin erreichbar sind. */
-    reachable: (lang) =>
-      flyers.filter((f) => f.status !== 'draft' && f.languages[lang] && !isScheduled(f)),
+    reachable: (lang) => flyers.filter((f) => isReachable(f, lang)),
   };
 }
 
 /** Liegt das Veröffentlichungsdatum in der Zukunft? */
 export function isScheduled(flyer, today = new Date().toISOString().slice(0, 10)) {
   return Boolean(flyer.publishDate && flyer.publishDate > today);
+}
+
+/**
+ * Sichtbarkeit — bewusst an genau einer Stelle.
+ *
+ * Jede Seite, die einen Flyer zeigt oder verlinkt, muss dieselbe Bedingung
+ * verwenden. Sonst taucht ein geplanter Flyer zwar nicht im Archiv auf,
+ * aber auf einer Themenseite oder unter der Kurzadresse — und ist damit
+ * vorzeitig veröffentlicht.
+ */
+
+/** Wird gelistet: veröffentlicht, in dieser Sprache vorhanden, nicht geplant. */
+export function isListed(flyer, lang) {
+  return flyer.status === 'published' && Boolean(flyer.languages[lang]) && !isScheduled(flyer);
+}
+
+/** Bleibt erreichbar: auch archiviert, aber weder Entwurf noch geplant. */
+export function isReachable(flyer, lang) {
+  return flyer.status !== 'draft' && Boolean(flyer.languages[lang]) && !isScheduled(flyer);
+}
+
+/** Erreichbar in mindestens einer Sprache — Grundlage der Kurzadressen. */
+export function isPublic(flyer) {
+  return flyer.status !== 'draft' && !isScheduled(flyer);
 }
 
 /** Kurzinfo für die Flyer-Karte: "8 Seiten · Lebensfragen". */

@@ -15,9 +15,12 @@ import { loadI18n } from './lib/i18n.mjs';
 import { createContext } from './lib/render-context.mjs';
 import { Emitter } from './lib/emit.mjs';
 import { buildAssets } from './lib/assets.mjs';
+import { buildFavicons } from './lib/favicon.mjs';
 import { buildMedia } from './lib/media.mjs';
 import { renderSitemap, renderRobots, renderHtaccess } from './lib/seo.mjs';
 import { buildServerFiles } from './lib/server-files.mjs';
+import { applyReleaseChecks } from './lib/release.mjs';
+import { collectRedirects } from './lib/redirects.mjs';
 import { checkLinks } from './lib/linkcheck.mjs';
 import { buildSearchIndex, assertIndexBudget } from './lib/search-index.mjs';
 import { render } from './lib/html.mjs';
@@ -56,14 +59,19 @@ export async function build(options = {}) {
   const started = Date.now();
   const config = loadConfig(options.configOverrides);
   const say = options.quiet ?? quiet ? () => {} : undefined;
+  // --force heisst: die Fehler sind bekannt und gewollt übergangen.
+  const allowErrors = options.force ?? force;
 
   if (!say) heading('Biblia — Website erzeugen');
 
   // --- Inhalte ---
   const i18n = loadI18n(config);
   const content = loadContent(config);
+  // Unter der endgültigen Domain sind Beispielinhalte und Platzhalter
+  // Fehler, keine Hinweise — und verhindern damit den Build.
+  applyReleaseChecks({ config, content });
 
-  if (content.issues.hasErrors && !force) {
+  if (content.issues.hasErrors && !allowErrors) {
     blank();
     error(plural(content.issues.errors.length, 'Fehler im Inhalt', 'Fehler im Inhalt'));
     for (const issue of content.issues.errors.slice(0, 10)) {
@@ -81,6 +89,7 @@ export async function build(options = {}) {
   // --- CSS, JavaScript, Schriften ---
   if (!say) step('Stilvorlagen und Skripte');
   const assets = await buildAssets({ emitter, urls: config.urls, minify });
+  assets.icons = await buildFavicons({ emitter, urls: config.urls });
 
   // --- Bilder aus den PDF-Dateien ---
   if (!say) step('Bilder aus den PDF-Dateien');
@@ -92,8 +101,10 @@ export async function build(options = {}) {
     force: options.forceMedia ?? forceMedia,
   });
   for (const issue of media.issues) {
-    content.issues.error(issue.subject, issue.message, { hint: issue.hint, file: issue.file });
+    const level = issue.level === 'warning' ? 'warning' : 'error';
+    content.issues[level](issue.subject, issue.message, { hint: issue.hint, file: issue.file });
   }
+  const mediaErrors = media.issues.filter((issue) => issue.level !== 'warning');
   // Die Seitenzahl steht erst nach dem Rendern fest.
   for (const flyer of content.flyers) {
     flyer.pageCount = media.pageCount(flyer, config.defaultLanguage);
@@ -184,7 +195,9 @@ export async function build(options = {}) {
       for (const item of items.values()) {
         const entry = item.languages[lang];
         if (!entry) continue;
-        const flyers = item.flyers.filter((f) => f.status === 'published' && f.languages[lang]);
+        // Dieselbe Bedingung wie im Archiv: ein geplanter Flyer darf auch
+        // hier nicht vorzeitig auftauchen.
+        const flyers = item.flyers.filter((f) => content.isListed(f, lang));
         if (flyers.length === 0) continue;
 
         const canonical = urlFor(item.slug);
@@ -252,10 +265,14 @@ export async function build(options = {}) {
       }),
     ),
   );
-  addToSitemap({ path: config.basePath, alternates: ctx.altsForHome(), priority: '1.0' });
+  // Bewusst NICHT in der Sitemap: diese Seite verweist über canonical auf
+  // /de/. Eine Adresse, die selbst auf eine andere zeigt, gehört nicht in
+  // eine Sitemap.
 
   for (const flyer of content.flyers) {
-    if (flyer.status === 'draft') continue;
+    // Entwürfe und geplante Flyer haben auch hier keine Adresse — sonst
+    // wäre die Kurzadresse die Hintertür an der Planung vorbei.
+    if (!content.isPublic(flyer)) continue;
     const lang = flyer.languages[entryLang] ? entryLang : Object.keys(flyer.languages)[0];
     if (!lang) continue;
 
@@ -290,7 +307,7 @@ export async function build(options = {}) {
   }
 
   // --- PHP-Endpunkte ---
-  buildServerFiles({ emitter, config, assets });
+  buildServerFiles({ emitter, config, content, assets });
 
   // --- Sitemap, robots, .htaccess ---
   if (!config.isStaging) {
@@ -298,8 +315,27 @@ export async function build(options = {}) {
   }
   emitter.add('robots.txt', renderRobots(config));
 
+  // --- Weiterleitungen früherer Adressen ---
+  //
+  // Ohne diesen Schritt wäre slug_history wirkungslos und jeder geteilte
+  // Link bräche bei einer Umbenennung.
+  const redirects = collectRedirects({ config, content });
+  const shadowed = redirects.filter((redirect) => {
+    const target = config.urls.stripBase(redirect.from);
+    return target !== null && emitter.files.has(`${target.replace(/^\//, '')}index.html`);
+  });
+  for (const redirect of shadowed) {
+    content.issues.error(redirect.flyer, `Der frühere slug verdeckt eine vorhandene Seite: ${redirect.from}`, {
+      hint: 'Entferne den Eintrag aus slug_history — sonst wäre diese Seite nicht mehr erreichbar.',
+    });
+  }
+  const usableRedirects = redirects.filter((redirect) => !shadowed.includes(redirect));
+
   const themeHash = `sha256-${crypto.createHash('sha256').update(THEME_BOOTSTRAP).digest('base64')}`;
-  emitter.add('.htaccess', renderHtaccess(config, { cspHashes: [themeHash], redirects: [] }));
+  emitter.add(
+    '.htaccess',
+    renderHtaccess(config, { cspHashes: [themeHash], redirects: usableRedirects }),
+  );
 
   // --- Schreiben ---
   if (!say) step('Dateien schreiben');
@@ -345,6 +381,19 @@ export async function build(options = {}) {
       ok(`${plural(linkReport.checked, 'Verweis geprüft', 'Verweise geprüft')} — alle in Ordnung`);
     }
 
+    if (usableRedirects.length > 0) {
+      ok(`${plural(usableRedirects.length, 'frühere Adresse wird weitergeleitet', 'frühere Adressen werden weitergeleitet')}`);
+    }
+
+    if (mediaErrors.length > 0) {
+      blank();
+      error(plural(mediaErrors.length, 'PDF-Datei konnte nicht verarbeitet werden', 'PDF-Dateien konnten nicht verarbeitet werden'));
+      for (const issue of mediaErrors) {
+        info(`${color.bold(issue.subject)}: ${issue.message}`);
+        if (issue.hint) info(color.gray(`    ${issue.hint}`));
+      }
+    }
+
     if (content.issues.warnings.length > 0) {
       blank();
       warn(`${plural(content.issues.warnings.length, 'Hinweis', 'Hinweise')} — Einzelheiten mit:  npm run check`);
@@ -356,8 +405,13 @@ export async function build(options = {}) {
     blank();
   }
 
+  // Ein leerer Lesemodus oder eine fehlende Weiterleitung darf nicht als
+  // gelungener Build gelten: sonst lädt npm run publish das Ergebnis hoch.
+  const failed =
+    linkReport.problems.length + (allowErrors ? 0 : mediaErrors.length + shadowed.length);
+
   return {
-    ok: linkReport.problems.length === 0,
+    ok: failed === 0,
     config,
     content,
     assets,

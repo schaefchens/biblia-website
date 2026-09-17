@@ -22,8 +22,14 @@ export function readerPage(ctx, flyer, lang, options = {}) {
   const main = html`
     <div class="reader" data-reader data-reader-total="${total}">
       <header class="reader__bar">
-        <a class="reader__close" href="${ctx.flyerUrl(flyer, lang)}" data-reader-close>
-          <span aria-hidden="true">←</span> ${t('reader.close')}
+        <a
+          class="reader__close"
+          href="${ctx.flyerUrl(flyer, lang)}"
+          data-reader-close
+          aria-label="${t('reader.close')}"
+        >
+          <span aria-hidden="true">←</span>
+          <span class="reader__close-text">${t('reader.close')}</span>
         </a>
 
         <p class="reader__title">${entry.title}</p>
@@ -40,6 +46,9 @@ export function readerPage(ctx, flyer, lang, options = {}) {
             data-share-text="${entry.description || entry.title}"
             data-share-url="${ctx.permalink(flyer)}"
             data-share-qr="${ctx.media?.qrUrl(flyer, lang) ?? ''}"
+            data-share-status="${ctx.media?.statusImage(flyer, lang)?.url ?? ''}"
+            data-share-slug="${flyer.slug}"
+            data-label-status="${t('action.shareImage')}"
             data-label-share="${t('action.share')}"
             data-label-whatsapp="${t('action.shareWhatsapp')}"
             data-label-copy="${t('action.copyLink')}"
@@ -56,9 +65,11 @@ export function readerPage(ctx, flyer, lang, options = {}) {
                 data-select-flyer="${flyer.id}"
                 data-select-title="${entry.title}"
                 data-select-slug="${flyer.slug}"
-                data-select-added="${t('action.inSelection')}"
+                data-select-min="${flyer.order.minQuantity}"
+                data-select-max="${flyer.order.maxQuantity}"
+                data-select-added="${t('action.inSelectionShort')}"
               >
-                ${t('action.order')}
+                ${t('action.orderShort')}
               </button>`
             : null}
         </div>

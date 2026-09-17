@@ -68,6 +68,9 @@ export function flyerPage(ctx, flyer, lang, options = {}) {
                 data-share-text="${entry.description || entry.title}"
                 data-share-url="${ctx.permalink(flyer)}"
                 data-share-qr="${ctx.media?.qrUrl(flyer, lang) ?? ''}"
+                data-share-status="${ctx.media?.statusImage(flyer, lang)?.url ?? ''}"
+                data-share-slug="${flyer.slug}"
+                data-label-status="${t('action.shareImage')}"
                 data-label-share="${t('action.share')}"
                 data-label-whatsapp="${t('action.shareWhatsapp')}"
                 data-label-copy="${t('action.copyLink')}"
@@ -84,7 +87,9 @@ export function flyerPage(ctx, flyer, lang, options = {}) {
                     data-select-flyer="${flyer.id}"
                     data-select-title="${entry.title}"
                     data-select-slug="${flyer.slug}"
-                data-select-added="${t('action.inSelection')}"
+                    data-select-min="${flyer.order.minQuantity}"
+                    data-select-max="${flyer.order.maxQuantity}"
+                    data-select-added="${t('action.inSelection')}"
                   >
                     ${t('action.order')}
                   </button>`
@@ -135,6 +140,18 @@ export function flyerPage(ctx, flyer, lang, options = {}) {
             <a class="button button--quiet" href="${ctx.textUrl(flyer, lang)}"
               >${t('action.readAsText')}</a
             >
+            ${ctx.media?.statusImage(flyer, lang)
+              ? html`<button
+                  class="button button--quiet"
+                  type="button"
+                  data-status-share="${ctx.media.statusImage(flyer, lang).url}"
+                  data-share-title="${entry.title}"
+                  data-share-slug="${flyer.slug}"
+                  hidden
+                >
+                  ${t('action.shareImage')}
+                </button>`
+              : null}
             ${flyer.download && ctx.media?.downloadUrl(flyer, lang)
               ? html`<a
                   class="button button--quiet"

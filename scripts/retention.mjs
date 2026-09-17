@@ -6,6 +6,15 @@
  * Personenbezogene Daten dürfen nicht unbegrenzt aufbewahrt werden. Die
  * Fristen stehen in config/site.json unter "retention".
  *
+ * Zwei Dinge sind hier wichtiger als überall sonst:
+ *
+ *   1. Es wird jeder Ordner durchsucht, auch das Archiv, in das
+ *      "npm run fetch -- --archive" die Einträge verschiebt. Ein Eintrag,
+ *      den niemand mehr sieht, ist trotzdem gespeichert.
+ *   2. Ein fehlgeschlagenes Löschen wird gemeldet und führt zu einem
+ *      Fehler. Ein Löschersuchen nach Art. 17 DSGVO, das stillschweigend
+ *      nicht ausgeführt wurde, wäre der schlimmste denkbare Ausgang.
+ *
  *   --dry-run          Nur anzeigen
  *   --local-only       Nur die lokale Kopie
  *   --person <text>    Zusätzlich alle Einträge löschen, die diesen Text
@@ -17,7 +26,8 @@ import path from 'node:path';
 import { DIR, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadDeployConfig, connect } from './lib/sftp.mjs';
-import { blank, color, heading, info, ok, plural, runMain, step, warn, fail } from './lib/log.mjs';
+import { shouldRemove, listLocalRecords, listRemoteRecords } from './lib/retention.mjs';
+import { blank, color, heading, info, ok, plural, runMain, step, warn, error, fail } from './lib/log.mjs';
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -27,31 +37,6 @@ const person = personIndex >= 0 ? args[personIndex + 1] : null;
 
 if (personIndex >= 0 && !person) {
   fail('Nach --person fehlt der Suchbegriff.', 'Beispiel:  npm run retention -- --person "maria@example.org"');
-}
-
-/** Ist dieser Eintrag abgelaufen oder betrifft er die gesuchte Person? */
-function shouldRemove(contents, maxAgeDays, searchTerm) {
-  let record;
-  try {
-    record = JSON.parse(contents);
-  } catch {
-    return { remove: false };
-  }
-
-  if (searchTerm) {
-    const haystack = JSON.stringify(record.contact ?? {}).toLowerCase();
-    if (haystack.includes(searchTerm.toLowerCase())) {
-      return { remove: true, reason: 'Löschersuchen' };
-    }
-  }
-
-  const created = Date.parse(record.created_at ?? '');
-  if (!Number.isFinite(created)) return { remove: false };
-  const ageDays = (Date.now() - created) / 86_400_000;
-  if (ageDays > maxAgeDays) {
-    return { remove: true, reason: `${Math.floor(ageDays)} Tage alt` };
-  }
-  return { remove: false };
 }
 
 runMain(async () => {
@@ -69,12 +54,14 @@ runMain(async () => {
   if (dryRun) warn('Probelauf — es wird nichts gelöscht.');
   blank();
 
+  /** Was nicht gelöscht werden konnte. Wird am Ende zum Fehler. */
+  const failures = [];
+
   // --- Lokal ---
   let removedLocal = 0;
   for (const kind of kinds) {
     const dir = path.join(DIR.appData, kind.dir);
-    if (!fs.existsSync(dir)) continue;
-    const files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
+    const files = listLocalRecords(dir);
     if (files.length === 0) continue;
 
     step(`${kind.label} lokal: ${plural(files.length, 'Eintrag', 'Einträge')}`);
@@ -83,7 +70,14 @@ runMain(async () => {
       const outcome = shouldRemove(fs.readFileSync(file, 'utf8'), kind.days, person);
       if (!outcome.remove) continue;
       info(color.gray(`    ${dryRun ? 'würde löschen' : 'gelöscht'}: ${rel(file)} (${outcome.reason})`));
-      if (!dryRun) fs.unlinkSync(file);
+      if (!dryRun) {
+        try {
+          fs.unlinkSync(file);
+        } catch (err) {
+          failures.push(`lokal ${rel(file)}: ${err.message}`);
+          continue;
+        }
+      }
       removedLocal += 1;
     }
   }
@@ -97,38 +91,60 @@ runMain(async () => {
     try {
       for (const kind of kinds) {
         const remoteDir = `${deploy.remoteRoot}/app-data/${kind.dir}`;
-        let entries;
-        try {
-          entries = await client.list(remoteDir);
-        } catch {
-          continue;
+        const { files, unreadable } = await listRemoteRecords(client, remoteDir);
+        for (const dir of unreadable) {
+          failures.push(`Verzeichnis nicht lesbar: ${dir}`);
         }
-        const files = entries
-          .filter((entry) => entry.type === '-' && entry.name.endsWith('.json'))
-          .map((entry) => entry.name)
-          .sort();
         if (files.length === 0) continue;
 
         step(`${kind.label} auf dem Server: ${plural(files.length, 'Eintrag', 'Einträge')}`);
         for (const name of files) {
-          const buffer = await client.get(`${remoteDir}/${name}`);
-          const outcome = shouldRemove(buffer.toString('utf8'), kind.days, person);
+          const remoteFile = `${remoteDir}/${name}`;
+          let outcome;
+          try {
+            const buffer = await client.get(remoteFile);
+            outcome = shouldRemove(buffer.toString('utf8'), kind.days, person);
+          } catch (err) {
+            failures.push(`nicht lesbar: ${remoteFile} (${err.message})`);
+            continue;
+          }
           if (!outcome.remove) continue;
+
           info(color.gray(`    ${dryRun ? 'würde löschen' : 'gelöscht'}: ${name} (${outcome.reason})`));
-          if (!dryRun) await client.delete(`${remoteDir}/${name}`, true).catch(() => {});
+          if (!dryRun) {
+            try {
+              await client.delete(remoteFile, true);
+            } catch (err) {
+              failures.push(`nicht gelöscht: ${remoteFile} (${err.message})`);
+              continue;
+            }
+          }
           removedRemote += 1;
         }
       }
     } finally {
       await client.end().catch(() => {});
     }
-    if (removedRemote === 0) ok('Auf dem Server ist nichts abgelaufen.');
+    if (removedRemote === 0 && failures.length === 0) ok('Auf dem Server ist nichts abgelaufen.');
   }
 
   blank();
   const total = removedLocal + removedRemote;
-  if (total === 0) ok('Nichts zu tun.');
-  else ok(`${plural(total, 'Eintrag', 'Einträge')} ${dryRun ? 'wären betroffen' : 'gelöscht'}.`);
+  if (total === 0 && failures.length === 0) ok('Nichts zu tun.');
+  else if (total > 0) ok(`${plural(total, 'Eintrag', 'Einträge')} ${dryRun ? 'wären betroffen' : 'gelöscht'}.`);
+
+  if (failures.length > 0) {
+    blank();
+    error(plural(failures.length, 'Eintrag konnte nicht gelöscht werden', 'Einträge konnten nicht gelöscht werden'));
+    for (const failure of failures) info(color.gray(`    ${failure}`));
+    blank();
+    info('Personenbezogene Daten sind damit weiterhin gespeichert.');
+    info('Bitte den Vorgang wiederholen:  npm run retention');
+    if (person) info(`Es ging um ein Löschersuchen zu "${person}" — das muss nachweislich erledigt werden.`);
+    blank();
+    return 1;
+  }
+
   blank();
   return 0;
 });
