@@ -1,0 +1,254 @@
+/*
+ * Leseansicht.
+ *
+ * Ohne JavaScript ist das eine einfache, untereinander lesbare Bildfolge.
+ * Die Klasse "is-paged" setzt das JavaScript, sobald die blätterbare
+ * Vollbildansicht aktiv ist.
+ */
+
+body.is-reader {
+  background: var(--paper-sunken);
+}
+
+.reader {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+.reader__bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--gutter);
+  padding-top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.reader__close {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.reader__close:hover {
+  color: var(--accent);
+}
+
+.reader__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reader__tool {
+  padding: 0.45em 0.9em;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reader__tool:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 40rem) {
+  .reader__title {
+    display: none;
+  }
+}
+
+/* Ohne JavaScript: alle Seiten untereinander. */
+.reader__stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--gutter) var(--space-8);
+}
+
+.reader__page {
+  margin: 0;
+  width: min(100%, 52rem);
+}
+
+.reader__image {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  background: var(--paper-raised);
+}
+
+.reader__caption {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-subtle);
+  text-align: center;
+}
+
+/* Mit JavaScript: eine Seite füllt den Bildschirm. */
+.reader.is-paged .reader__stage {
+  position: relative;
+  padding: var(--space-4) var(--gutter);
+  justify-content: center;
+  overflow: hidden;
+}
+
+.reader.is-paged .reader__page {
+  display: none;
+  width: auto;
+  max-width: min(100%, 52rem);
+}
+
+.reader.is-paged .reader__page.is-current {
+  display: block;
+}
+
+.reader.is-paged .reader__image {
+  max-height: calc(100dvh - 11rem);
+  width: auto;
+  margin-inline: auto;
+  transition: transform var(--transition);
+  transform-origin: center center;
+}
+
+.reader.is-zoomed .reader__stage {
+  overflow: auto;
+}
+
+.reader.is-zoomed .reader__image {
+  max-height: none;
+  width: min(180%, 180vw);
+  cursor: zoom-out;
+}
+
+.reader.is-paged .reader__caption {
+  display: none;
+}
+
+/* Tippflächen links und rechts zum Blättern. */
+.reader.is-paged .reader__stage::before,
+.reader.is-paged .reader__stage::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22%;
+  z-index: 2;
+}
+
+.reader.is-paged .reader__stage::before {
+  left: 0;
+}
+
+.reader.is-paged .reader__stage::after {
+  right: 0;
+}
+
+.reader.is-zoomed .reader__stage::before,
+.reader.is-zoomed .reader__stage::after {
+  display: none;
+}
+
+.reader__nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--gutter);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+.reader__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reader__step:hover:not([disabled]) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reader__step[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.reader__counter {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  min-width: 9rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Als Text lesen --- */
+.flyer-text {
+  margin-top: var(--section-gap);
+}
+
+.flyer-text__page + .flyer-text__page {
+  margin-top: var(--space-7);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.flyer-text__heading {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+  margin-bottom: var(--space-4);
+}
+
+.flyer-text p {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+}

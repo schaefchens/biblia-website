@@ -1,0 +1,146 @@
+{
+  "site": {
+    "skipToContent": "Skip to content",
+    "menu": "Menu",
+    "close": "Close",
+    "home": "Home"
+  },
+  "nav": {
+    "flyers": "Leaflets",
+    "topics": "Topics",
+    "categories": "Categories",
+    "about": "About us",
+    "contact": "Contact",
+    "selection": "My selection",
+    "imprint": "Imprint",
+    "privacy": "Privacy"
+  },
+  "action": {
+    "read": "Read now",
+    "share": "Share",
+    "order": "Order printed copy",
+    "addToSelection": "Add to selection",
+    "removeFromSelection": "Remove from selection",
+    "inSelection": "In your selection",
+    "download": "Download PDF",
+    "readAsText": "Read as text",
+    "allFlyers": "All leaflets",
+    "copyLink": "Copy link",
+    "copied": "Link copied",
+    "showQr": "Show QR code",
+    "shareWhatsapp": "Share on WhatsApp",
+    "shareImage": "Share image",
+    "back": "Back",
+    "more": "More"
+  },
+  "flyer": {
+    "pagesOne": "{n} page",
+    "pagesOther": "{n} pages",
+    "related": "Related leaflets",
+    "topics": "Topics",
+    "verse": "Bible reference",
+    "printTitle": "Printed edition",
+    "printFree": "free of charge",
+    "printContribution": "Contribution {price}",
+    "onlyInLanguage": "This leaflet is currently only available in {language}.",
+    "pdfFromLanguage": "The reading view shows the {language} edition.",
+    "archived": "This leaflet is no longer being reprinted. The reading view stays available permanently.",
+    "cover": "Cover of {title}",
+    "page": "Page {n} of {title}",
+    "textNotice": "This text was read automatically from the print file when the site was built. The printed edition is always authoritative."
+  },
+  "reader": {
+    "open": "Reading view",
+    "close": "Close reading view",
+    "next": "Next page",
+    "previous": "Previous page",
+    "pageOf": "Page {current} of {total}",
+    "overview": "Page overview",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "keyboardHint": "Use the arrow keys to turn pages, Escape to close."
+  },
+  "archive": {
+    "title": "All leaflets",
+    "search": "Search",
+    "searchPlaceholder": "Title, topic, Bible reference …",
+    "filterCategory": "Category",
+    "filterTopic": "Topic",
+    "filterTag": "Tag",
+    "all": "All",
+    "reset": "Reset filters",
+    "resultsOne": "{n} leaflet",
+    "resultsOther": "{n} leaflets",
+    "noResults": "No leaflets found.",
+    "noResultsHint": "Try a different search term or reset the filters.",
+    "pageLabel": "Page {n}",
+    "nextPage": "Next",
+    "previousPage": "Previous",
+    "pagination": "Pagination"
+  },
+  "home": {
+    "featured": "Selected leaflets",
+    "latest": "Recently published",
+    "topics": "Topics",
+    "recommended": "Good to pass on",
+    "allFlyers": "See all leaflets"
+  },
+  "selection": {
+    "title": "My selection",
+    "empty": "Your selection is still empty.",
+    "emptyHint": "Open a leaflet and choose \"Order printed copy\".",
+    "quantity": "Quantity",
+    "remove": "Remove",
+    "count": "{n} selected",
+    "submit": "Send order request",
+    "note": "The order request is non-binding. We will reply by email.",
+    "noscript": "Selecting several leaflets needs JavaScript. You can also simply tell us which ones you would like using the contact form."
+  },
+  "form": {
+    "name": "Name",
+    "email": "Email",
+    "street": "Street and number",
+    "postalCode": "Postal code",
+    "city": "City",
+    "country": "Country",
+    "message": "Message",
+    "subject": "Subject",
+    "required": "Required",
+    "send": "Send",
+    "sending": "Sending …",
+    "privacyNote": "By sending you agree to your details being processed to handle this request. See the {privacyLink} for more.",
+    "successTitle": "Thank you!",
+    "successOrder": "Your order request has arrived. We will reply by email.",
+    "successContact": "Your message has arrived. We will reply by email.",
+    "errorTitle": "That did not work",
+    "errorGeneric": "The request could not be sent. Please try again later.",
+    "errorValidation": "Please check the highlighted fields.",
+    "errorRateLimit": "Too many requests were sent. Please try again in a few minutes.",
+    "testMode": "Test mode: this site is still on a test address. Requests are stored for testing only."
+  },
+  "theme": {
+    "label": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "language": {
+    "label": "Language",
+    "available": "Also available in {languages}",
+    "switchNotice": "This page is also available in {language}.",
+    "switchAction": "Switch",
+    "dismiss": "Dismiss"
+  },
+  "error": {
+    "notFoundTitle": "Page not found",
+    "notFoundText": "This address does not exist — perhaps it has changed.",
+    "notFoundAction": "Go to all leaflets"
+  },
+  "footer": {
+    "tagline": "Christian leaflets to read, share and order.",
+    "legal": "Legal"
+  },
+  "social": {
+    "callToAction": "Read online or order a printed copy"
+  }
+}

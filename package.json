@@ -1,0 +1,41 @@
+{
+  "name": "biblia-website",
+  "version": "1.0.0",
+  "description": "Static-First Website für den christlichen Verein Biblia",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/preview.mjs",
+    "dev": "node scripts/dev.mjs",
+    "publish": "node scripts/publish.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "fetch": "node scripts/fetch.mjs",
+    "new": "node scripts/new.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "clean": "node scripts/clean.mjs",
+    "demo": "node scripts/demo.mjs",
+    "retention": "node scripts/retention.mjs",
+    "test": "node --test \"scripts/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/source-serif-4": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/source-serif-4": "5.3.0",
+    "@napi-rs/canvas": "1.0.9",
+    "esbuild": "0.28.2",
+    "js-yaml": "5.4.2",
+    "markdown-it": "15.0.2",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.3.289",
+    "qrcode": "1.5.4",
+    "sharp": "0.35.4",
+    "ssh2-sftp-client": "12.1.1"
+  }
+}

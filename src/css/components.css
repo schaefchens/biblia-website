@@ -1,0 +1,335 @@
+/* Wiederkehrende Bausteine. */
+
+/* --- Schaltflächen --- */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.7em 1.35em;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition),
+    color var(--transition), transform var(--transition);
+}
+
+.button:hover {
+  background: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button--secondary {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.button--secondary:hover {
+  background: var(--paper-raised);
+  border-color: var(--ink-subtle);
+  color: var(--ink);
+}
+
+.button--quiet {
+  background: transparent;
+  color: var(--ink-muted);
+  padding-inline: 0.5em;
+}
+
+.button--quiet:hover {
+  background: transparent;
+  color: var(--accent);
+}
+
+.button--large {
+  font-size: var(--text-base);
+  padding: 0.85em 1.6em;
+}
+
+.button[disabled],
+.button[aria-disabled='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* --- Flyer-Karte --- */
+/*
+ * Absichtlich sehr reduziert: Cover, Titel, eine kleine Zusatzangabe.
+ * Bestellen, Teilen, Sprache und Preis gehören auf die Detailseite.
+ */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+}
+
+.card:hover {
+  color: inherit;
+}
+
+.card__media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-card);
+  aspect-ratio: var(--card-aspect, 1 / 1.414);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.card:hover .card__media {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+.card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--paper-sunken);
+}
+
+/* Platzhalter, solange keine Bilder erzeugt sind. */
+.card__placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-4);
+  background: linear-gradient(160deg, var(--paper-raised), var(--paper-sunken));
+  color: var(--ink-subtle);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  text-align: center;
+  line-height: var(--leading-snug);
+}
+
+.card__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  margin: 0;
+}
+
+.card:hover .card__title {
+  color: var(--accent);
+}
+
+.card__meta {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+/* --- Hero --- */
+.hero {
+  padding-block: clamp(var(--space-7), 5vw, var(--space-9)) 0;
+}
+
+.hero__title {
+  font-size: var(--text-hero);
+  font-weight: 500;
+  max-width: 16ch;
+  margin: 0;
+}
+
+.hero__intro {
+  margin: var(--space-5) 0 0;
+  max-width: 46ch;
+  font-size: var(--text-lg);
+  color: var(--ink-muted);
+}
+
+.hero__actions {
+  margin-top: var(--space-6);
+}
+
+/* --- Aufmacher für einen einzelnen Flyer --- */
+.feature {
+  display: grid;
+  gap: var(--space-6) var(--space-7);
+  align-items: center;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+}
+
+.feature__media {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lift);
+  aspect-ratio: 1 / 1.414;
+  background: var(--paper-raised);
+}
+
+.feature__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 var(--space-3);
+}
+
+.feature__title {
+  font-size: var(--text-3xl);
+  margin: 0;
+}
+
+.feature__text {
+  margin: var(--space-4) 0 0;
+  color: var(--ink-muted);
+  max-width: 48ch;
+}
+
+@media (max-width: 48rem) {
+  .feature {
+    grid-template-columns: 1fr;
+  }
+  .feature__media {
+    max-width: 22rem;
+  }
+}
+
+/* --- Kleine Marken und Listen --- */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.35em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  text-decoration: none;
+  background: var(--paper-raised);
+  transition: border-color var(--transition), color var(--transition);
+}
+
+.tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* --- Hinweisfeld --- */
+.notice {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.notice--accent {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.notice--test {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: var(--danger-soft);
+  color: var(--ink);
+}
+
+/* --- Redaktioneller Fließtext --- */
+.prose {
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.prose > * + * {
+  margin-top: var(--space-4);
+}
+
+.prose h2 {
+  font-size: var(--text-xl);
+  margin-top: var(--space-7);
+}
+
+.prose h3 {
+  font-size: var(--text-lg);
+  margin-top: var(--space-6);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: var(--space-5);
+}
+
+.prose li + li {
+  margin-top: var(--space-2);
+}
+
+.prose a {
+  color: var(--accent);
+}
+
+/* --- Bibelvers --- */
+.verse {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-style: italic;
+  line-height: var(--leading-snug);
+  color: var(--ink);
+  border: 0;
+  border-left: 2px solid var(--accent);
+  padding-left: var(--space-5);
+  margin: var(--space-6) 0;
+}
+
+.verse__ref {
+  display: block;
+  margin-top: var(--space-3);
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+/* --- Einstellungen in der Fußzeile --- */
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.settings__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings__label {
+  color: var(--ink-subtle);
+}

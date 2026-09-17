@@ -1,1 +1,21 @@
+# Abhängigkeiten
+node_modules/
+
+# Lokal erzeugte Dateien — werden jederzeit neu gebaut
+dist/
+generated/
+print-assets/
+
+# Laufzeitdaten vom Server.
+# ACHTUNG: enthält Namen und Postadressen. Niemals ins Git-Repository aufnehmen.
+app-data/
+
+# Zugangsdaten für das Deployment
 sftp.env
+
+# Betriebssystem und Editoren
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
