@@ -48,14 +48,17 @@ function succeeds(command, args, cwd = SYS.root) {
 }
 
 /** Führt ein Kommando aus und gibt die Ausgabe zurück, oder null bei Fehler. */
-function run(command, args, options = {}) {
+function run(command, args, { raw = false, ...options } = {}) {
   try {
-    return execFileSync(command, args, {
+    const output = execFileSync(command, args, {
       cwd: SYS.root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       ...options,
-    }).trim();
+    });
+    // raw: bei "git submodule status" trägt das führende Leerzeichen
+    // Bedeutung — beschneiden würde die Aussage verlieren.
+    return raw ? output : output.trim();
   } catch {
     return null;
   }
@@ -369,7 +372,7 @@ function checkWerkzeug(home) {
   }
 
   const status = parseSubmoduleStatus(
-    run('git', ['submodule', 'status', '--', WERKZEUG_DIR], { cwd: home.root }),
+    run('git', ['submodule', 'status', '--', WERKZEUG_DIR], { cwd: home.root, raw: true }),
   );
   const described = describeSubmoduleState(status, { dir: WERKZEUG_DIR });
 

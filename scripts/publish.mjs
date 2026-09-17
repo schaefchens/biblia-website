@@ -41,9 +41,12 @@ const customMessage = messageIndex >= 0 ? args[messageIndex + 1] : null;
  * Arbeitsverzeichnis würde hier dessen Versionsgeschichte gesichert statt
  * der Inhalte.
  */
-function git(cwd, argv, { allowFailure = false } = {}) {
+function git(cwd, argv, { allowFailure = false, raw = false } = {}) {
   try {
-    return execFileSync('git', argv, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const output = execFileSync('git', argv, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    // raw: bei "git submodule status" trägt das führende Leerzeichen
+    // Bedeutung — beschneiden würde die Aussage verlieren.
+    return raw ? output : output.trim();
   } catch (err) {
     if (allowFailure) return null;
     throw err;
@@ -182,7 +185,7 @@ runMain(async () => {
   // Mit einem anderen Stand als festgehalten entstünde eine andere Website
   // als vorgesehen. Das ist der eine Fehler, den ein Submodul lautlos macht.
   const submodule = parseSubmoduleStatus(
-    git(home.root, ['submodule', 'status', '--', WERKZEUG_DIR], { allowFailure: true }),
+    git(home.root, ['submodule', 'status', '--', WERKZEUG_DIR], { allowFailure: true, raw: true }),
   );
   if (submodule.state === 'moved' || submodule.state === 'conflict') {
     const described = describeSubmoduleState(submodule, { dir: WERKZEUG_DIR });

@@ -35,6 +35,16 @@ test('Ein U heisst: ungelöster Konflikt', () => {
   assert.equal(parseSubmoduleStatus('U0000000000 werkzeug\n').state, 'conflict');
 });
 
+test('Eine beschnittene Zeile gilt trotzdem als eingerichtet', () => {
+  // Ein Aufrufer, der die Ausgabe beschneidet, verlöre sonst genau die
+  // Aussage "alles in Ordnung" — und würde grundlos warnen.
+  const status = parseSubmoduleStatus('e9abf295a1973c80 werkzeug (v1.0.0-2-ge9abf29)');
+  assert.equal(status.state, 'ok');
+  assert.equal(status.sha, 'e9abf295a1973c80');
+  assert.equal(status.path, 'werkzeug');
+  assert.equal(status.describe, 'v1.0.0-2-ge9abf29');
+});
+
 test('Keine Ausgabe heisst: es lässt sich nichts sagen', () => {
   for (const value of ['', '   \n', null, undefined]) {
     assert.equal(parseSubmoduleStatus(value).state, 'unknown');

@@ -64,6 +64,18 @@ function git(cwd, argv) {
   execFileSync('git', argv, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
+/** Ist das ein Pfad auf diesem Rechner statt einer Adresse im Netz? */
+const isLocalPath = (value) => !/^[a-z][a-z0-9+.-]*:\/\//i.test(value) && !value.includes('@');
+
+/** Die aussagekräftigste Zeile aus einer Git-Fehlermeldung. */
+function gitError(err) {
+  const lines = String(err.stderr ?? err.message)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.find((line) => line.startsWith('fatal:') && !line.includes('clone of')) ?? lines[0] ?? '';
+}
+
 function gitWorks() {
   try {
     execFileSync('git', ['--version'], { stdio: 'ignore' });
@@ -146,13 +158,20 @@ runMain(async () => {
       info(color.gray('    Von https://git-lfs.com installieren, danach:  git lfs install'));
     }
 
+    // Git lehnt seit 2.38 Submodule aus lokalen Pfaden ab — eine Absicherung
+    // gegen fremde Repositories, die beim Klonen etwas mitbringen. Hier hat
+    // der Pfad aber ausdrücklich auf der Kommandozeile gestanden, ist also
+    // eine bewusste Entscheidung. Die Ausnahme gilt nur für diesen einen
+    // Aufruf und nur dann.
+    const allowLocal = isLocalPath(werkzeugUrl) ? ['-c', 'protocol.file.allow=always'] : [];
     try {
-      git(root, ['submodule', 'add', '--', werkzeugUrl, WERKZEUG_DIR]);
+      git(root, [...allowLocal, 'submodule', 'add', '--', werkzeugUrl, WERKZEUG_DIR]);
       info(color.gray(`    Werkzeug als Submodul: ${werkzeugUrl}`));
     } catch (err) {
       warn('Das Werkzeug liess sich nicht als Submodul hinzufügen.');
-      info(color.gray(`    ${String(err.stderr ?? err.message).trim().split('\n').slice(-1)[0]}`));
+      info(color.gray(`    ${gitError(err)}`));
       info(color.gray(`    Von Hand:  git submodule add ${werkzeugUrl} ${WERKZEUG_DIR}`));
+      info(color.gray('    Der Inhaltsordner ist trotzdem angelegt.'));
     }
   }
 

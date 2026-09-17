@@ -25,6 +25,10 @@
  *   "+"  eingerichtet, aber auf einem anderen Stand
  *   "U"  Konflikt beim Zusammenführen
  *
+ * Das führende Leerzeichen trägt also Bedeutung. Weil es naheliegt, die
+ * Ausgabe eines Befehls zu beschneiden, wird eine Zeile, die direkt mit
+ * einem Commit-Hash beginnt, ebenfalls als "eingerichtet" gelesen.
+ *
  * @returns {{state:'ok'|'missing'|'moved'|'conflict'|'unknown', sha:string|null, path:string|null, describe:string|null}}
  */
 export function parseSubmoduleStatus(output) {
@@ -35,16 +39,18 @@ export function parseSubmoduleStatus(output) {
   if (!line) return { state: 'unknown', sha: null, path: null, describe: null };
 
   const marker = line[0];
+  const trimmed = /^[0-9a-f]{7,}\s/.test(line);
   const state =
-    marker === ' ' ? 'ok'
+    marker === ' ' || trimmed ? 'ok'
     : marker === '-' ? 'missing'
     : marker === '+' ? 'moved'
     : marker === 'U' ? 'conflict'
     : 'unknown';
 
-  // " <sha> <pfad> (<beschreibung>)" — die Beschreibung fehlt, solange das
-  // Submodul nicht eingerichtet ist.
-  const match = /^.(\S+)\s+(\S+)(?:\s+\((.+)\))?\s*$/.exec(line);
+  // "<zeichen><sha> <pfad> (<beschreibung>)" — die Beschreibung fehlt,
+  // solange das Submodul nicht eingerichtet ist.
+  const pattern = trimmed ? /^(\S+)\s+(\S+)(?:\s+\((.+)\))?\s*$/ : /^.(\S+)\s+(\S+)(?:\s+\((.+)\))?\s*$/;
+  const match = pattern.exec(line);
   if (!match) return { state, sha: null, path: null, describe: null };
 
   return { state, sha: match[1], path: match[2], describe: match[3] ?? null };
