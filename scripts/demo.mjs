@@ -8,7 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { blank, heading, info, ok, step, warn, runMain, plural, color } from './lib/log.mjs';
 import { CATEGORIES, TOPICS, FLYERS, taxonomyIntro } from './lib/demo-data.mjs';
@@ -108,10 +108,10 @@ const PAGE_TEXTS = {
   },
 };
 
-function createPages(languages) {
+function createPages(home, languages) {
   let created = 0;
   for (const [name, byLang] of Object.entries(PAGE_TEXTS)) {
-    if (writeFile(path.join(DIR.pages, `${name}.md`), `---\n${MARKER}\n---\n`)) created += 1;
+    if (writeFile(path.join(home.pages, `${name}.md`), `---\n${MARKER}\n---\n`)) created += 1;
     for (const lang of languages) {
       const texts = byLang[lang.code];
       if (!texts) continue;
@@ -120,20 +120,20 @@ function createPages(languages) {
         if (texts[key]) front += `${key}: ${yamlValue(texts[key])}\n`;
       }
       front += '---\n';
-      if (writeFile(path.join(DIR.pages, `${name}.${lang.code}.md`), `${front}\n${texts.body ?? ''}\n`)) created += 1;
+      if (writeFile(path.join(home.pages, `${name}.${lang.code}.md`), `${front}\n${texts.body ?? ''}\n`)) created += 1;
     }
   }
   if (created > 0) ok(`Seiten: ${plural(Object.keys(PAGE_TEXTS).length, 'Seite', 'Seiten')} angelegt`);
   return created;
 }
 
-async function createFlyers(config) {
+async function createFlyers(home, config) {
   let created = 0;
   let pdfCount = 0;
 
   for (const spec of FLYERS) {
     const dirName = `${spec.id}-${spec.slug}`;
-    const dir = path.join(DIR.flyers, dirName);
+    const dir = path.join(home.flyers, dirName);
 
     let front = `---\n${MARKER}\nid: ${spec.id}\nslug: ${spec.slug}\n`;
     front += `category: ${spec.category}\n`;
@@ -183,7 +183,7 @@ async function createFlyers(config) {
 }
 
 /** Entfernt alles, was die Markierung trägt. */
-function removeDemo() {
+function removeDemo(home) {
   let removed = 0;
   const isDemoFile = (file) => {
     try {
@@ -193,8 +193,8 @@ function removeDemo() {
     }
   };
 
-  for (const dirName of fs.existsSync(DIR.flyers) ? fs.readdirSync(DIR.flyers).sort() : []) {
-    const dir = path.join(DIR.flyers, dirName);
+  for (const dirName of fs.existsSync(home.flyers) ? fs.readdirSync(home.flyers).sort() : []) {
+    const dir = path.join(home.flyers, dirName);
     const marker = path.join(dir, 'flyer.md');
     if (fs.statSync(dir).isDirectory() && fs.existsSync(marker) && isDemoFile(marker)) {
       fs.rmSync(dir, { recursive: true });
@@ -203,7 +203,7 @@ function removeDemo() {
     }
   }
 
-  for (const dir of [DIR.pages, DIR.topics, DIR.categories]) {
+  for (const dir of [home.pages, home.topics, home.categories]) {
     if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir).sort()) {
       const file = path.join(dir, name);
@@ -217,11 +217,12 @@ function removeDemo() {
 }
 
 runMain(async () => {
-  const config = loadConfig();
+  const home = resolveHome();
+  const config = loadConfig({ home });
 
   if (remove) {
     heading('Beispielinhalte entfernen');
-    const removed = removeDemo();
+    const removed = removeDemo(home);
     blank();
     if (removed === 0) ok('Es waren keine Beispielinhalte vorhanden.');
     else ok(`${plural(removed, 'Eintrag entfernt', 'Einträge entfernt')}.`);
@@ -233,7 +234,7 @@ runMain(async () => {
   info(color.gray('    Nur zum Entwickeln und Ausprobieren. Entfernen mit:  npm run demo -- --remove'));
   blank();
 
-  const existing = fs.existsSync(DIR.flyers) ? fs.readdirSync(DIR.flyers).filter((n) => !n.startsWith('.')) : [];
+  const existing = fs.existsSync(home.flyers) ? fs.readdirSync(home.flyers).filter((n) => !n.startsWith('.')) : [];
   if (existing.length > 0 && !force) {
     warn('Es sind bereits Flyer vorhanden — bestehende Dateien bleiben unverändert.');
     info(color.gray('    Überschreiben mit:  npm run demo -- --force'));
@@ -241,14 +242,14 @@ runMain(async () => {
   }
 
   step('Kategorien und Themen');
-  createTaxonomy(DIR.categories, CATEGORIES, 'Kategorien', config.activeLanguages);
-  createTaxonomy(DIR.topics, TOPICS, 'Themen', config.activeLanguages);
+  createTaxonomy(home.categories, CATEGORIES, 'Kategorien', config.activeLanguages);
+  createTaxonomy(home.topics, TOPICS, 'Themen', config.activeLanguages);
 
   step('Seiten');
-  createPages(config.activeLanguages);
+  createPages(home, config.activeLanguages);
 
   step('Flyer und PDFs');
-  await createFlyers(config);
+  await createFlyers(home, config);
 
   blank();
   ok('Fertig.');

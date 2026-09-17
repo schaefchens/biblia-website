@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR, rel } from './paths.mjs';
+import { rel } from './paths.mjs';
 import { readMarkdownFile, ContentError } from './frontmatter.mjs';
 import { Issues } from './issues.mjs';
 import { renderMarkdown, markdownToPlainText, truncate } from './markdown.mjs';
@@ -551,11 +551,11 @@ export function byDateDesc(a, b) {
  * Liest alle Inhalte ein.
  *
  * @param {object} config
- * @param {object} [options]
- * @param {object} [options.dirs] Andere Inhaltsverzeichnisse (wird von den Tests genutzt).
+ * @param {object} options
+ * @param {object} options.dirs  Verzeichnisse des Inhaltsordners aus resolveHome().
  * @returns {{ flyers, flyersById, pages, topics, categories, issues }}
  */
-export function loadContent(config, { dirs = DIR } = {}) {
+export function loadContent(config, { dirs }) {
   const issues = new Issues();
 
   const categories = readTaxonomy(dirs.categories, 'kategorie', config, issues);

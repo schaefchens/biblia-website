@@ -8,7 +8,7 @@
  *   --force       Trotz Inhaltsfehlern bauen und fehlerhafte Flyer überspringen
  */
 import crypto from 'node:crypto';
-import { DIR } from './lib/paths.mjs';
+import { resolveHome } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadContent } from './lib/content.mjs';
 import { loadI18n } from './lib/i18n.mjs';
@@ -57,7 +57,8 @@ function paginate(items, perPage) {
 
 export async function build(options = {}) {
   const started = Date.now();
-  const config = loadConfig(options.configOverrides);
+  const home = options.home ?? resolveHome();
+  const config = loadConfig({ home, ...options.configOverrides });
   const say = options.quiet ?? quiet ? () => {} : undefined;
   // --force heisst: die Fehler sind bekannt und gewollt übergangen.
   const allowErrors = options.force ?? force;
@@ -65,8 +66,8 @@ export async function build(options = {}) {
   if (!say) heading('Biblia — Website erzeugen');
 
   // --- Inhalte ---
-  const i18n = loadI18n(config);
-  const content = loadContent(config);
+  const i18n = loadI18n(config, { overrideDir: home.i18n });
+  const content = loadContent(config, { dirs: home });
   // Unter der endgültigen Domain sind Beispielinhalte und Platzhalter
   // Fehler, keine Hinweise — und verhindern damit den Build.
   applyReleaseChecks({ config, content });
@@ -81,14 +82,19 @@ export async function build(options = {}) {
     blank();
     info('Vollständige Liste mit:  npm run check');
     blank();
-    return { ok: false, config, content };
+    return { ok: false, config, content, home };
   }
 
-  const emitter = new Emitter(DIR.dist);
+  const emitter = new Emitter(home.dist);
 
   // --- CSS, JavaScript, Schriften ---
   if (!say) step('Stilvorlagen und Skripte');
-  const assets = await buildAssets({ emitter, urls: config.urls, minify });
+  const assets = await buildAssets({
+    emitter,
+    urls: config.urls,
+    minify,
+    themeCss: home.themeCss,
+  });
   assets.icons = await buildFavicons({ emitter, urls: config.urls });
 
   // --- Bilder aus den PDF-Dateien ---
@@ -99,6 +105,8 @@ export async function build(options = {}) {
     i18n,
     emitter,
     force: options.forceMedia ?? forceMedia,
+    cacheDir: home.cache,
+    printDir: home.printAssets,
   });
   for (const issue of media.issues) {
     const level = issue.level === 'warning' ? 'warning' : 'error';
@@ -342,7 +350,7 @@ export async function build(options = {}) {
   const result = emitter.write();
 
   // --- Verweise prüfen ---
-  const linkReport = checkLinks(DIR.dist, config);
+  const linkReport = checkLinks(home.dist, config);
 
   const duration = Date.now() - started;
 
@@ -414,6 +422,7 @@ export async function build(options = {}) {
     ok: failed === 0,
     config,
     content,
+    home,
     assets,
     emitter,
     result,

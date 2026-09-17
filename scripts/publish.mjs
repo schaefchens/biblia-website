@@ -14,11 +14,14 @@
  *   --no-git      Ohne Sicherung in Git
  *   --message X   Eigener Text für die Sicherung
  */
+import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { ROOT } from './lib/paths.mjs';
+import { SYS, WERKZEUG_DIR, resolveHome } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadContent } from './lib/content.mjs';
 import { applyReleaseChecks } from './lib/release.mjs';
+import { parseSubmoduleStatus, describeSubmoduleState } from './lib/werkzeug.mjs';
+import { isRepositoryRoot } from './lib/repo.mjs';
 import { build } from './build.mjs';
 import {
   blank, color, error, formatDuration, heading, info, ok, plural, runMain, step, warn, fail,
@@ -30,16 +33,22 @@ const noGit = args.includes('--no-git');
 const messageIndex = args.indexOf('--message');
 const customMessage = messageIndex >= 0 ? args[messageIndex + 1] : null;
 
-function git(argv, { allowFailure = false } = {}) {
+/**
+ * Git im Inhaltsordner — nie im Werkzeug.
+ *
+ * Die Unterscheidung ist wesentlich: das Werkzeug ist ein eigenes
+ * Repository, das als Submodul im Inhaltsordner liegt. Ohne ausdrückliches
+ * Arbeitsverzeichnis würde hier dessen Versionsgeschichte gesichert statt
+ * der Inhalte.
+ */
+function git(cwd, argv, { allowFailure = false } = {}) {
   try {
-    return execFileSync('git', argv, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    return execFileSync('git', argv, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch (err) {
     if (allowFailure) return null;
     throw err;
   }
 }
-
-const hasGit = () => git(['rev-parse', '--git-dir'], { allowFailure: true }) !== null;
 
 /**
  * Sichert die Inhalte in Git.
@@ -48,8 +57,8 @@ const hasGit = () => git(['rev-parse', '--git-dir'], { allowFailure: true }) !==
  * Namen und Postadressen — landen die einmal in der Versionsgeschichte,
  * bekommt man sie praktisch nicht mehr heraus.
  */
-function commitChanges(summary) {
-  const status = git(['status', '--porcelain'], { allowFailure: true }) ?? '';
+function commitChanges(home, summary) {
+  const status = git(home.root, ['status', '--porcelain'], { allowFailure: true }) ?? '';
   const entries = status.split('\n').filter(Boolean);
 
   const personal = entries.filter((line) => /\sapp-data\//.test(` ${line.slice(3)}`) || line.slice(3).startsWith('app-data/'));
@@ -72,22 +81,27 @@ function commitChanges(summary) {
     return false;
   }
 
-  git(['add', '--', 'content', 'config', 'src', 'scripts', 'server', 'package.json', 'package-lock.json', '.gitignore', '.gitattributes', 'README.md']);
+  // Ausdrücklich ohne werkzeug/: welcher Stand des Werkzeugs gelten soll,
+  // entscheidet die Betreuung des Projekts — nicht ein Veröffentlichen
+  // nebenbei. So kann ein versehentlich verschobenes Submodul nie
+  // mitgesichert werden.
+  git(home.root, ['add', '--', 'content', 'config', 'i18n', 'theme.css',
+    'package.json', 'README.md', '.gitignore', '.gitattributes', 'sftp.env.example']);
 
-  const staged = git(['diff', '--cached', '--name-only'], { allowFailure: true }) ?? '';
+  const staged = git(home.root, ['diff', '--cached', '--name-only'], { allowFailure: true }) ?? '';
   if (staged.trim() === '') {
     info(color.gray('    Keine Änderungen zu sichern.'));
     return false;
   }
 
-  git(['commit', '-m', customMessage ?? summary]);
+  git(home.root, ['commit', '-m', customMessage ?? summary]);
   ok(`Gesichert: ${plural(staged.split('\n').filter(Boolean).length, 'Datei', 'Dateien')}`);
   return true;
 }
 
 /** Schickt die Sicherung zum Remote. */
-function pushChanges() {
-  const remotes = git(['remote'], { allowFailure: true }) ?? '';
+function pushChanges(home) {
+  const remotes = git(home.root, ['remote'], { allowFailure: true }) ?? '';
   if (remotes.trim() === '') {
     warn('Es ist kein Git-Remote eingerichtet — die Inhalte sind nur auf diesem Rechner gesichert.');
     info(color.gray('    Ein privates Repository verbinden:  git remote add origin <adresse>'));
@@ -95,9 +109,9 @@ function pushChanges() {
   }
   if (dryRun) return;
 
-  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], { allowFailure: true }) ?? 'main';
+  const branch = git(home.root, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFailure: true }) ?? 'main';
   const result = spawnSync('git', ['push', '--set-upstream', remotes.split('\n')[0], branch], {
-    cwd: ROOT,
+    cwd: home.root,
     encoding: 'utf8',
   });
   if (result.status === 0) {
@@ -111,14 +125,15 @@ function pushChanges() {
 
 runMain(async () => {
   const started = Date.now();
-  const config = loadConfig();
+  const home = resolveHome();
+  const config = loadConfig({ home });
 
   heading('Biblia Veröffentlichung');
   if (dryRun) warn('Probelauf — es wird nichts verändert.');
 
   // --- 1. Prüfen ---
   step('Inhalte prüfen');
-  const content = loadContent(config);
+  const content = loadContent(config, { dirs: home });
   // Unter der endgültigen Domain zählen Beispielinhalte, Platzhalter im
   // Impressum und unzustellbare Adressen als Fehler. Was einmal
   // veröffentlicht ist, steht in Suchmaschinen und auf gedruckten Flyern.
@@ -162,10 +177,24 @@ runMain(async () => {
     info(color.gray(`    ${plural(warnings.length, 'Hinweis', 'Hinweise')} — Einzelheiten mit:  npm run check`));
   }
 
+  // --- Stand des Werkzeugs ---
+  //
+  // Mit einem anderen Stand als festgehalten entstünde eine andere Website
+  // als vorgesehen. Das ist der eine Fehler, den ein Submodul lautlos macht.
+  const submodule = parseSubmoduleStatus(
+    git(home.root, ['submodule', 'status', '--', WERKZEUG_DIR], { allowFailure: true }),
+  );
+  if (submodule.state === 'moved' || submodule.state === 'conflict') {
+    const described = describeSubmoduleState(submodule, { dir: WERKZEUG_DIR });
+    blank();
+    warn(described.message);
+    if (described.hint) info(color.gray(`    ${described.hint}`));
+  }
+
   // --- 2. Erzeugen ---
   blank();
   step('Statische Website wird erzeugt');
-  const outcome = await build({ quiet: true });
+  const outcome = await build({ home, quiet: true });
   if (!outcome.ok) {
     blank();
     error('Die Website konnte nicht fehlerfrei erzeugt werden.');
@@ -183,13 +212,14 @@ runMain(async () => {
   blank();
   if (noGit) {
     info(color.gray('    Sicherung in Git übersprungen (--no-git).'));
-  } else if (!hasGit()) {
-    warn('Dieser Ordner ist kein Git-Repository — es wird nichts gesichert.');
+  } else if (!isRepositoryRoot(home.root)) {
+    warn('Der Inhaltsordner ist kein eigenes Git-Repository — es wird nichts gesichert.');
+    info(color.gray(`    ${home.root}`));
   } else {
     step('Inhalte sichern');
     const summary = `Inhalte aktualisiert: ${content.flyers.length} Flyer`;
-    commitChanges(summary);
-    pushChanges();
+    commitChanges(home, summary);
+    pushChanges(home);
   }
 
   // --- 4. Hochladen ---
@@ -201,10 +231,13 @@ runMain(async () => {
     return 0;
   }
 
-  const deploy = spawnSync(process.execPath, ['scripts/deploy.mjs'], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
+  // Absoluter Pfad und ausdrücklicher Inhaltsordner: das Werkzeug liegt
+  // woanders als die Inhalte.
+  const deploy = spawnSync(
+    process.execPath,
+    [path.join(SYS.scripts, 'deploy.mjs'), '--home', home.root],
+    { cwd: home.root, stdio: 'inherit' },
+  );
 
   blank();
   if (deploy.status !== 0) {

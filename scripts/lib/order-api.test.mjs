@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { DIR } from './paths.mjs';
+import { SYS } from './paths.mjs';
 
 const php = spawnSync('php', ['-v'], { encoding: 'utf8' });
 const hasPhp = php.status === 0;
@@ -27,7 +27,7 @@ const CATALOG = {
 function parseItems(items, { language = 'de', catalog = CATALOG } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'biblia-php-'));
   const script = path.join(dir, 'run.php');
-  const validate = path.join(DIR.server, 'api', '_lib', 'validate.php');
+  const validate = path.join(SYS.server, 'api', '_lib', 'validate.php');
 
   fs.writeFileSync(
     script,
@@ -130,7 +130,7 @@ test('Die Zahl der Positionen ist begrenzt', { skip: !hasPhp && 'PHP ist nicht i
 });
 
 test('Alle PHP-Dateien sind fehlerfrei', { skip: !hasPhp && 'PHP ist nicht installiert' }, () => {
-  const apiDir = path.join(DIR.server, 'api');
+  const apiDir = path.join(SYS.server, 'api');
   const files = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

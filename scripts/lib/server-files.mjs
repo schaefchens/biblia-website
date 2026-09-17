@@ -4,7 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR } from './paths.mjs';
+import { SYS } from './paths.mjs';
 import { buildCatalog } from './catalog.mjs';
 
 /** Alle PHP-Dateien unterhalb von server/api. */
@@ -45,7 +45,7 @@ function toPhp(value, indent = '  ') {
  * @param {object} options.assets
  */
 export function buildServerFiles({ emitter, config, content, assets }) {
-  const apiDir = path.join(DIR.server, 'api');
+  const apiDir = path.join(SYS.server, 'api');
   for (const file of listPhpFiles(apiDir)) {
     emitter.copy(`api/${file}`, path.join(apiDir, file));
   }

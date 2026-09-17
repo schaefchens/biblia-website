@@ -4,8 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from './config.mjs';
+import { SYS } from './paths.mjs';
 
-const BASE = JSON.parse(fs.readFileSync(new URL('../../config/site.json', import.meta.url), 'utf8'));
+// Die Vorlage, aus der auch ein neuer Inhaltsordner entsteht. Bewusst nicht
+// die Konfiguration eines bestimmten Inhaltsordners: das Werkzeug kennt
+// keinen — und ein Test, der an fremden Inhalten hängt, prüft das Falsche.
+const BASE = JSON.parse(
+  fs.readFileSync(path.join(SYS.templates, 'home', 'site.json'), 'utf8'),
+);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'biblia-config-'));
 let counter = 0;
 
@@ -18,18 +24,38 @@ function withConfig(mutate) {
   return () => loadConfig({ file, env: {} });
 }
 
-test('Die echte Projektkonfiguration ist gültig', () => {
-  const config = loadConfig();
-  assert.equal(config.basePath, '/v3/');
+test('Die mitgelieferte Vorlage ist gültig', () => {
+  const config = withConfig(() => {})();
   assert.deepEqual(config.languageCodes, ['de', 'en']);
   assert.equal(config.defaultLanguage, 'de');
+  assert.equal(config.formatVersion, 1);
 });
 
-test('Die Test-Adresse wird als Staging erkannt', () => {
-  assert.equal(loadConfig().isStaging, true);
-  assert.equal(loadConfig({ baseUrl: 'https://biblia.at/' }).isCanonical, true);
-  assert.equal(loadConfig({ baseUrl: 'https://www.biblia.at/' }).isCanonical, true);
-  assert.equal(loadConfig({ baseUrl: 'https://biblia.at.example.com/' }).isStaging, true);
+test('Ohne Inhaltsordner und ohne Datei wird das gesagt', () => {
+  assert.throws(() => loadConfig(), /kein Inhaltsordner/);
+});
+
+test('Die endgültige Domain wird von allem anderen unterschieden', () => {
+  const at = (baseUrl) => {
+    const raw = structuredClone(BASE);
+    raw.baseUrl = baseUrl;
+    const file = path.join(tmp, `domain-${(counter += 1)}.json`);
+    fs.writeFileSync(file, JSON.stringify(raw));
+    return loadConfig({ file, env: {} });
+  };
+  assert.equal(at('https://beispiel.test/v3/').isStaging, true);
+  assert.equal(at('https://biblia.at/').isCanonical, true);
+  assert.equal(at('https://www.biblia.at/').isCanonical, true);
+  assert.equal(at('https://biblia.at.example.com/').isStaging, true);
+});
+
+test('Ein neueres Dateiformat verlangt ein neueres Werkzeug', () => {
+  assert.throws(
+    withConfig((raw) => { raw.formatVersion = 99; }),
+    /neuere Fassung des Werkzeugs/,
+  );
+  // Fehlt die Angabe, stammt der Ordner aus der Zeit davor — das ist Fassung 1.
+  assert.equal(withConfig((raw) => { delete raw.formatVersion; })().formatVersion, 1);
 });
 
 test('Fehlendes Routen-Segment wird gemeldet', () => {
@@ -50,7 +76,9 @@ test('Doppelte Routen-Segmente werden abgelehnt', () => {
 
 test('Aktive Sprache ohne Routen-Tabelle wird gemeldet', () => {
   assert.throws(
-    withConfig((c) => { c.languages.find((l) => l.code === 'it').enabled = true; delete c.routes.it; }),
+    withConfig((c) => {
+      c.languages.push({ code: 'it', label: 'Italiano', htmlLang: 'it', enabled: true });
+    }),
     /fehlt eine Routen-Tabelle/,
   );
 });

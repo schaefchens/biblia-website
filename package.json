@@ -1,7 +1,7 @@
 {
   "name": "biblia-website",
   "version": "1.0.0",
-  "description": "Static-First Website für den christlichen Verein Biblia",
+  "description": "Werkzeug für die Biblia-Website: erzeugt aus einem Inhaltsordner die fertige Website",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -9,6 +9,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "init": "node scripts/init.mjs",
     "check": "node scripts/check.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/preview.mjs",

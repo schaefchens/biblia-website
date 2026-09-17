@@ -11,7 +11,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadDeployConfig, connect, ensureDirectory } from './lib/sftp.mjs';
 import { blank, color, heading, info, ok, plural, runMain, step, warn, error } from './lib/log.mjs';
@@ -29,8 +29,9 @@ const KINDS = [
 ];
 
 runMain(async () => {
-  loadConfig();
-  const deploy = loadDeployConfig({ remoteRootOverride: option('--remote-root') });
+  const home = resolveHome();
+  loadConfig({ home });
+  const deploy = loadDeployConfig({ home, remoteRootOverride: option('--remote-root') });
 
   heading('Biblia — Anfragen vom Server holen');
   info(color.gray(`    Quelle: ${deploy.username}@${deploy.host}:${deploy.remoteRoot}/app-data`));
@@ -47,7 +48,7 @@ runMain(async () => {
   try {
     for (const kind of KINDS) {
       const remoteDir = `${deploy.remoteRoot}/app-data/${kind.remote}`;
-      const localDir = path.join(DIR.appData, kind.local);
+      const localDir = path.join(home.appData, kind.local);
 
       let entries;
       try {
@@ -114,7 +115,7 @@ runMain(async () => {
 
   blank();
   warn('Diese Dateien enthalten Namen und Postadressen.');
-  info(color.gray(`    Sie liegen in ${rel(DIR.appData)} und sind von Git ausgenommen.`));
+  info(color.gray(`    Sie liegen in ${rel(home.appData)} und sind von Git ausgenommen.`));
   info(color.gray('    Bitte nicht per E-Mail weitergeben und nicht in geteilte Ordner kopieren.'));
   info(color.gray('    Aufbewahrungsfristen anwenden:  npm run retention'));
 

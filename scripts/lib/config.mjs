@@ -6,10 +6,21 @@
  * kaputte URL nach dem Hochladen.
  */
 import fs from 'node:fs';
-import { FILE } from './paths.mjs';
 import { readEnvFile } from './env.mjs';
 import { fail } from './log.mjs';
 import { createUrls, parseBaseUrl } from './url.mjs';
+
+/**
+ * Die Fassung des Dateiformats im Inhaltsordner.
+ *
+ * Das Werkzeug wird aktualisiert, der Inhaltsordner bleibt — und umgekehrt
+ * kann ein Inhaltsordner neuer sein als ein Werkzeug, das jemand noch nicht
+ * nachgezogen hat. Diese Zahl macht aus einem verwirrenden Absturz eine
+ * Anweisung.
+ *
+ * Erhöhen, sobald der Inhaltsordner anders aufgebaut sein muss.
+ */
+export const FORMAT_VERSION = 1;
 
 const SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const LANGUAGE_PATTERN = /^[a-z]{2}(?:-[a-z]{2})?$/;
@@ -44,6 +55,27 @@ function readJson(file) {
     fail(
       `config/site.json ist kein gültiges JSON: ${err.message}`,
       'Häufigste Ursachen: ein Komma zu viel vor einer schliessenden Klammer, oder ein fehlendes Anführungszeichen.',
+    );
+  }
+}
+
+function checkFormatVersion(raw) {
+  // Fehlt die Angabe, stammt der Inhaltsordner aus der Zeit davor — das ist
+  // Fassung 1 und in Ordnung.
+  const version = raw.formatVersion ?? 1;
+  if (!Number.isInteger(version) || version < 1) {
+    fail(
+      `Ungültige Angabe "formatVersion" in config/site.json: ${JSON.stringify(raw.formatVersion)}`,
+      'Erwartet wird eine ganze Zahl, zurzeit 1.',
+    );
+  }
+  if (version > FORMAT_VERSION) {
+    fail(
+      `Der Inhaltsordner ist für eine neuere Fassung des Werkzeugs angelegt (${version}).`,
+      `Dieses Werkzeug versteht Fassung ${FORMAT_VERSION}.\n` +
+        '  Im Inhaltsordner das Werkzeug nachziehen:\n' +
+        '      git submodule update\n' +
+        '      npm run setup',
     );
   }
 }
@@ -142,14 +174,22 @@ function checkShortRoutes(raw, activeLanguages) {
 /**
  * Lädt die Konfiguration.
  * @param {object} [options]
+ * @param {object} [options.home]    Der Inhaltsordner aus resolveHome().
  * @param {string} [options.baseUrl] Überschreibt die Adresse, z. B. für die lokale Vorschau.
  * @param {string} [options.file]    Andere Konfigurationsdatei (wird von den Tests genutzt).
  * @param {object} [options.env]     Ersetzt den Inhalt von sftp.env (wird von den Tests genutzt).
  */
 export function loadConfig(options = {}) {
-  const raw = readJson(options.file ?? FILE.siteConfig);
+  const file = options.file ?? options.home?.siteConfig;
+  if (!file) {
+    fail(
+      'Es ist kein Inhaltsordner angegeben.',
+      'loadConfig() braucht entweder home aus resolveHome() oder file.',
+    );
+  }
+  const raw = readJson(file);
 
-  const env = options.env ?? readEnvFile(FILE.sftpEnv);
+  const env = options.env ?? readEnvFile(options.home?.sftpEnv ?? '');
   const baseUrl = options.baseUrl || env.SITE_BASE_URL || raw.baseUrl;
   if (!baseUrl) {
     fail(
@@ -164,6 +204,7 @@ export function loadConfig(options = {}) {
     fail(err.message, 'Die Adresse steht in config/site.json unter "baseUrl".');
   }
 
+  checkFormatVersion(raw);
   const activeLanguages = checkLanguages(raw);
   checkRoutes(raw, activeLanguages);
   checkShortRoutes(raw, activeLanguages);
@@ -206,6 +247,7 @@ export function loadConfig(options = {}) {
 
   return Object.freeze({
     ...raw,
+    formatVersion: raw.formatVersion ?? 1,
     baseUrl: urls.baseUrl,
     origin: urls.origin,
     basePath: urls.basePath,

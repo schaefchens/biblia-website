@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import * as esbuild from 'esbuild';
-import { DIR } from './paths.mjs';
+import { SYS } from './paths.mjs';
 import { shortHash } from './emit.mjs';
 
 const require = createRequire(import.meta.url);
@@ -40,8 +40,9 @@ const CSS_ENTRY = [
  * @param {import('./emit.mjs').Emitter} options.emitter
  * @param {object} options.urls   URL-Helfer aus der Konfiguration
  * @param {boolean} [options.minify]
+ * @param {string} [options.themeCss] Eigene Stilvorlage aus dem Inhaltsordner
  */
-export async function buildAssets({ emitter, urls, minify = true }) {
+export async function buildAssets({ emitter, urls, minify = true, themeCss = null }) {
   // --- Schriften ---
   const preloadFonts = [];
   for (const [pkg, file, preload] of FONT_FILES) {
@@ -59,7 +60,7 @@ export async function buildAssets({ emitter, urls, minify = true }) {
   const css = await esbuild.build({
     stdin: {
       contents: cssSource,
-      resolveDir: DIR.css,
+      resolveDir: SYS.css,
       loader: 'css',
     },
     bundle: true,
@@ -71,13 +72,29 @@ export async function buildAssets({ emitter, urls, minify = true }) {
     legalComments: 'none',
     target: ['chrome111', 'firefox121', 'safari16.4', 'edge111'],
   });
-  const cssText = css.outputFiles[0].text;
+  let cssText = css.outputFiles[0].text;
+
+  // Die eigene Stilvorlage des Vereins kommt zuletzt und kann damit jeden
+  // Wert überschreiben. Sie wird angehängt statt mitgebündelt: so bleibt der
+  // Hash im Dateinamen richtig, ohne einen Pfad ausserhalb des Werkzeugs
+  // auflösen zu müssen.
+  if (themeCss && fs.existsSync(themeCss)) {
+    const own = fs.readFileSync(themeCss, 'utf8');
+    if (/^\s*@import/m.test(own)) {
+      throw new Error(
+        'theme.css darf kein @import enthalten — die eingebundene Datei käme nicht mit auf den Server.',
+      );
+    }
+    const transformed = await esbuild.transform(own, { loader: 'css', minify });
+    cssText += `\n${transformed.code}`;
+  }
+
   const cssName = `assets/app.${shortHash(cssText)}.css`;
   emitter.add(cssName, cssText);
 
   // --- JavaScript ---
   const js = await esbuild.build({
-    entryPoints: [path.join(DIR.js, 'app.mjs')],
+    entryPoints: [path.join(SYS.js, 'app.mjs')],
     bundle: true,
     minify,
     write: false,

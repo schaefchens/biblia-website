@@ -8,7 +8,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR } from './paths.mjs';
 import { Cache, hashFile } from './cache.mjs';
 import { renderPdf, renderPdfPage, PdfError } from './pdf.mjs';
 import { createDerivatives } from './images.mjs';
@@ -32,8 +31,8 @@ function buildSrcset(sources, baseUrl) {
  * @param {object} options.i18n
  * @param {import('./emit.mjs').Emitter} options.emitter
  * @param {boolean} [options.force]  Zwischenspeicher übergehen
- * @param {string} [options.cacheDir] Anderer Zwischenspeicher (wird von den Tests genutzt)
- * @param {string} [options.printDir] Anderes Ziel für die Druck-QR-Codes (dito)
+ * @param {string} options.cacheDir  Zwischenspeicher der Bilder
+ * @param {string} options.printDir  Ziel für die Druck-QR-Codes
  * @param {(text:string)=>void} [options.onProgress]
  */
 export async function buildMedia({
@@ -42,8 +41,8 @@ export async function buildMedia({
   i18n,
   emitter,
   force = false,
-  cacheDir = DIR.cache,
-  printDir: printRoot = DIR.printAssets,
+  cacheDir,
+  printDir: printRoot,
   onProgress,
 }) {
   const cache = new Cache(cacheDir, { disabled: force });

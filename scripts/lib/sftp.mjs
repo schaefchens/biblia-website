@@ -16,7 +16,6 @@
 import crypto from 'node:crypto';
 import SftpClient from 'ssh2-sftp-client';
 import { readEnvFile } from './env.mjs';
-import { FILE } from './paths.mjs';
 import { fail } from './log.mjs';
 import { isProtectedPath } from './emit.mjs';
 
@@ -27,11 +26,12 @@ export const MANIFEST_FILE = '.biblia-manifest.json';
  * Liest und prüft die Zugangsdaten.
  *
  * @param {object} [options]
+ * @param {object} [options.home] Der Inhaltsordner aus resolveHome().
  * @param {string} [options.remoteRootOverride] Anderes Zielverzeichnis
  * @param {object} [options.env] Ersetzt den Inhalt von sftp.env (wird von den Tests genutzt)
  */
-export function loadDeployConfig({ remoteRootOverride = null, env: envOverride = null } = {}) {
-  const env = envOverride ?? readEnvFile(FILE.sftpEnv);
+export function loadDeployConfig({ home = null, remoteRootOverride = null, env: envOverride = null } = {}) {
+  const env = envOverride ?? readEnvFile(home?.sftpEnv ?? '');
 
   const missing = ['SFTP_HOST', 'SFTP_USER', 'SFTP_PASSWORD', 'SFTP_REMOTE_ROOT'].filter(
     (key) => !env[key],

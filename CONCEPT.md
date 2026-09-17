@@ -658,6 +658,9 @@ Normale Texteditoren sollen ausreichen.
 
 ## Einfacher Mitarbeiter-Workflow
 
+> **Nachtrag zur Umsetzung.** Die Befehle werden im Inhaltsordner
+> ausgeführt; die Mitarbeiter sehen nur ihn. Die Namen sind unverändert.
+
 Die Mitarbeiter sind nicht technisch versiert.
 
 Der normale Arbeitsablauf soll so einfach wie möglich sein:
@@ -798,7 +801,14 @@ Mitarbeiter sollen Git nicht zwingend direkt bedienen müssen.
 
 ## Git und Datenhoheit
 
-Das Projektverzeichnis ist die zentrale Datenquelle.
+> **Nachtrag zur Umsetzung.** Inhalte und Werkzeug liegen seit V3 in zwei
+> getrennten Repositories: der *Inhaltsordner* enthält `content/`,
+> `config/site.json`, `sftp.env` und die erzeugten Dateien, das *Werkzeug*
+> enthält `scripts/`, `src/` und `server/` und liegt im Inhaltsordner als
+> Submodul unter `werkzeug/`. Der Gedanke unten gilt unverändert — er
+> bezieht sich jetzt auf den Inhaltsordner.
+
+Der Inhaltsordner ist die zentrale Datenquelle.
 
 Lokale Daten haben Vorrang.
 
@@ -1387,6 +1397,12 @@ Noch nicht notwendig:
 * komplexe Rollenverwaltung
 
 ## Projektstruktur
+
+> **Nachtrag zur Umsetzung.** Der Baum unten beschreibt den ursprünglichen
+> Entwurf mit einem einzigen Verzeichnis. Umgesetzt ist er in zwei
+> Repositories: `content/`, `config/`, `generated/`, `dist/`, `app-data/`,
+> `print-assets/` und `sftp.env` liegen im Inhaltsordner, `scripts/`, `src/`
+> und `server/` im Werkzeug. Siehe README.md.
 
 Erstelle eine klare, wartbare Struktur.
 

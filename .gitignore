@@ -19,3 +19,8 @@ Thumbs.db
 *.log
 .idea/
 .vscode/
+
+# Entwicklungs-Inhaltsordner (siehe scripts/init.mjs).
+# Mit fuehrendem Schraegstrich: sonst waere auch scripts/templates/home/
+# ausgenommen, und das Werkzeug kaeme ohne seine Vorlagen.
+/home/

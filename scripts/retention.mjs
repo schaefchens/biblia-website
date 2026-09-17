@@ -23,7 +23,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadDeployConfig, connect } from './lib/sftp.mjs';
 import { shouldRemove, listLocalRecords, listRemoteRecords } from './lib/retention.mjs';
@@ -40,7 +40,8 @@ if (personIndex >= 0 && !person) {
 }
 
 runMain(async () => {
-  const config = loadConfig();
+  const home = resolveHome();
+  const config = loadConfig({ home });
   const kinds = [
     { dir: 'orders', label: 'Bestellanfragen', days: config.retention?.orderDays ?? 365 },
     { dir: 'contact', label: 'Kontaktnachrichten', days: config.retention?.contactDays ?? 180 },
@@ -60,7 +61,7 @@ runMain(async () => {
   // --- Lokal ---
   let removedLocal = 0;
   for (const kind of kinds) {
-    const dir = path.join(DIR.appData, kind.dir);
+    const dir = path.join(home.appData, kind.dir);
     const files = listLocalRecords(dir);
     if (files.length === 0) continue;
 
@@ -86,7 +87,7 @@ runMain(async () => {
   // --- Auf dem Server ---
   let removedRemote = 0;
   if (!localOnly) {
-    const deploy = loadDeployConfig();
+    const deploy = loadDeployConfig({ home });
     const client = await connect(deploy);
     try {
       for (const kind of kinds) {

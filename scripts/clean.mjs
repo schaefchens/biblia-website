@@ -7,7 +7,7 @@
  *           (der nächste Build dauert dann deutlich länger)
  */
 import fs from 'node:fs';
-import { DIR, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { blank, color, formatBytes, heading, info, ok, runMain } from './lib/log.mjs';
 
 const all = process.argv.slice(2).includes('--all');
@@ -28,15 +28,14 @@ function sizeOf(dir) {
 }
 
 runMain(async () => {
+  const home = resolveHome();
   heading('Biblia — Aufräumen');
 
   const targets = [
-    { dir: DIR.dist, label: 'Fertige Website' },
-    { dir: DIR.printAssets, label: 'QR-Codes für den Druck' },
-    { dir: DIR.catalog, label: 'Katalogdaten' },
-    { dir: DIR.searchIndex, label: 'Suchindex' },
+    { dir: home.dist, label: 'Fertige Website' },
+    { dir: home.printAssets, label: 'QR-Codes für den Druck' },
   ];
-  if (all) targets.push({ dir: DIR.cache, label: 'Zwischenspeicher der Bilder' });
+  if (all) targets.push({ dir: home.cache, label: 'Zwischenspeicher der Bilder' });
 
   let freed = 0;
   for (const target of targets) {

@@ -15,7 +15,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { DIR } from './lib/paths.mjs';
+import { resolveHome } from './lib/paths.mjs';
 import { isProtectedPath } from './lib/emit.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { blank, color, heading, info, ok, runMain, step, warn } from './lib/log.mjs';
@@ -46,11 +46,11 @@ const MIME = {
 };
 
 /** Startet den PHP-Entwicklungsserver für die API, falls PHP vorhanden ist. */
-function startPhp(apiPort) {
-  const apiDir = path.join(DIR.dist, 'api');
+function startPhp(apiPort, distDir) {
+  const apiDir = path.join(distDir, 'api');
   if (!fs.existsSync(apiDir)) return null;
   try {
-    const child = spawn('php', ['-S', `127.0.0.1:${apiPort}`, '-t', DIR.dist], {
+    const child = spawn('php', ['-S', `127.0.0.1:${apiPort}`, '-t', distDir], {
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     child.on('error', () => {});
@@ -83,14 +83,15 @@ function proxyToPhp(request, response, apiPort, targetPath) {
 }
 
 runMain(async () => {
+  const home = resolveHome();
   if (!skipBuild) {
-    await build({ quiet: false });
+    await build({ home, quiet: false });
   }
 
-  const config = loadConfig();
+  const config = loadConfig({ home });
   const basePath = config.basePath;
   const apiPort = port + 1;
-  const php = startPhp(apiPort);
+  const php = startPhp(apiPort, home.dist);
 
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, `http://localhost:${port}`);
@@ -126,8 +127,8 @@ runMain(async () => {
       : [relative, `${relative}/index.html`];
 
     for (const candidate of candidates) {
-      const file = path.join(DIR.dist, candidate);
-      if (!file.startsWith(DIR.dist)) break;
+      const file = path.join(home.dist, candidate);
+      if (!file.startsWith(home.dist)) break;
       if (fs.existsSync(file) && fs.statSync(file).isFile()) {
         // Verzeichnisse ohne abschliessenden Schrägstrich umleiten — genau
         // wie Apache es auf dem Server tut.
@@ -145,7 +146,7 @@ runMain(async () => {
       }
     }
 
-    const notFound = path.join(DIR.dist, '404.html');
+    const notFound = path.join(home.dist, '404.html');
     response.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
     if (fs.existsSync(notFound)) fs.createReadStream(notFound).pipe(response);
     else response.end('404');
@@ -157,7 +158,7 @@ runMain(async () => {
   ok(`http://localhost:${port}${basePath}`);
   info(color.gray(`    Liefert den Ordner dist/ unter demselben Unterverzeichnis aus wie der Server.`));
   if (php) info(color.gray(`    PHP-Endpunkte werden an einen lokalen PHP-Server weitergereicht.`));
-  else if (fs.existsSync(path.join(DIR.dist, 'api'))) warn('PHP ist nicht installiert — die Formulare lassen sich lokal nicht testen.');
+  else if (fs.existsSync(path.join(home.dist, 'api'))) warn('PHP ist nicht installiert — die Formulare lassen sich lokal nicht testen.');
   blank();
   info(color.gray('    Beenden mit Strg+C'));
   blank();

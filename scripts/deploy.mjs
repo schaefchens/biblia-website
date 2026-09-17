@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-import { DIR } from './lib/paths.mjs';
+import { resolveHome } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { listFilesRecursive, isProtectedPath } from './lib/emit.mjs';
 import {
@@ -42,15 +42,15 @@ function hashFile(file) {
 }
 
 /** Beschreibung aller hochzuladenden Dateien. */
-function localManifest() {
+function localManifest(distDir) {
   const manifest = {};
-  for (const relative of listFilesRecursive(DIR.dist)) {
+  for (const relative of listFilesRecursive(distDir)) {
     // Laufzeitdaten gehören dem Server, nicht dem Build. Lokal entstehen
     // sie nur beim Ausprobieren der Vorschau.
     if (isProtectedPath(relative) && !relative.endsWith('.htaccess') && !relative.endsWith('index.html')) {
       continue;
     }
-    manifest[relative] = hashFile(path.join(DIR.dist, relative));
+    manifest[relative] = hashFile(path.join(distDir, relative));
   }
   return manifest;
 }
@@ -80,8 +80,9 @@ async function readRemoteJson(client, remotePath) {
 }
 
 runMain(async () => {
-  const config = loadConfig();
-  const deploy = loadDeployConfig({ remoteRootOverride: option('--remote-root') });
+  const home = resolveHome();
+  const config = loadConfig({ home });
+  const deploy = loadDeployConfig({ home, remoteRootOverride: option('--remote-root') });
   const fingerprint = projectFingerprint(config);
 
   heading('Biblia — Website hochladen');
@@ -90,11 +91,11 @@ runMain(async () => {
   if (dryRun) warn('Probelauf — es wird nichts verändert.');
   blank();
 
-  if (!fs.existsSync(DIR.dist) || listFilesRecursive(DIR.dist).length === 0) {
+  if (!fs.existsSync(home.dist) || listFilesRecursive(home.dist).length === 0) {
     fail('Der Ordner dist/ ist leer.', 'Zuerst die Website erzeugen:  npm run build');
   }
 
-  const local = localManifest();
+  const local = localManifest(home.dist);
   const localPaths = Object.keys(local);
 
   step('Verbinden');
@@ -151,7 +152,7 @@ runMain(async () => {
       : [];
 
     let bytes = 0;
-    for (const file of changed) bytes += fs.statSync(path.join(DIR.dist, file)).size;
+    for (const file of changed) bytes += fs.statSync(path.join(home.dist, file)).size;
 
     blank();
     ok(`${plural(localPaths.length, 'Datei', 'Dateien')} in dist/`);
@@ -201,7 +202,7 @@ runMain(async () => {
     await runPooled(clients, uploadOrder(changed), async (client, file) => {
       const target = `${deploy.remoteRoot}/${file}`;
       try {
-        await client.put(path.join(DIR.dist, file), target);
+        await client.put(path.join(home.dist, file), target);
         // PHP und .htaccess müssen für den Webserver lesbar sein.
         await client.chmod(target, 0o644).catch(() => {});
       } catch (err) {

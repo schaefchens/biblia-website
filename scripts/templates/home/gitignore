@@ -1,0 +1,22 @@
+# Das Werkzeug bringt seine Programmbibliotheken selbst mit.
+werkzeug/node_modules/
+node_modules/
+
+# Erzeugte Dateien — entstehen bei jedem npm run build neu.
+dist/
+generated/
+print-assets/
+
+# Bestellanfragen und Kontaktnachrichten vom Server.
+# ACHTUNG: enthält Namen und Postadressen. Niemals ins Repository aufnehmen.
+app-data/
+
+# Zugangsdaten für das Hochladen. Enthält ein Passwort im Klartext.
+sftp.env
+
+# Betriebssystem und Editoren
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/

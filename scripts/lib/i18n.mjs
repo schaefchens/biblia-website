@@ -3,10 +3,14 @@
  *
  * Ein fehlender Schlüssel ist ein Build-Fehler, kein leerer Text auf der
  * Seite — sonst fällt eine vergessene Übersetzung erst dem Besucher auf.
+ *
+ * Die Vorgaben kommen aus dem Werkzeug. Der Inhaltsordner darf sie in
+ * i18n/<sprache>.json ergänzen oder überschreiben — nur so lässt sich eine
+ * Sprache aufnehmen, für die das Werkzeug noch keine Texte mitbringt.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIR } from './paths.mjs';
+import { SYS } from './paths.mjs';
 import { fail } from './log.mjs';
 
 /** Wandelt verschachtelte Objekte in eine flache Liste von Schlüsselpfaden. */
@@ -18,19 +22,44 @@ export function flattenKeys(object, prefix = '') {
   );
 }
 
-function readStrings(lang) {
-  const file = path.join(DIR.i18n, `${lang}.json`);
-  if (!fs.existsSync(file)) {
-    fail(
-      `Die Oberflächentexte für die Sprache "${lang}" fehlen.`,
-      `Erwartet wird die Datei src/i18n/${lang}.json.`,
-    );
-  }
+function readJsonFile(file, label) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
-    fail(`src/i18n/${lang}.json ist kein gültiges JSON: ${err.message}`);
+    fail(`${label} ist kein gültiges JSON: ${err.message}`);
   }
+}
+
+/** Tiefes Zusammenführen — der Inhaltsordner gewinnt, Zweig für Zweig. */
+function merge(base, override) {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const existing = out[key];
+    const bothObjects =
+      value && typeof value === 'object' && !Array.isArray(value) &&
+      existing && typeof existing === 'object' && !Array.isArray(existing);
+    out[key] = bothObjects ? merge(existing, value) : value;
+  }
+  return out;
+}
+
+function readStrings(lang, overrideDir, referenceLang) {
+  const systemFile = path.join(SYS.i18n, `${lang}.json`);
+  const homeFile = overrideDir ? path.join(overrideDir, `${lang}.json`) : null;
+  const hasSystem = fs.existsSync(systemFile);
+  const hasHome = Boolean(homeFile && fs.existsSync(homeFile));
+
+  if (!hasSystem && !hasHome) {
+    fail(
+      `Die Oberflächentexte für die Sprache "${lang}" fehlen.`,
+      `Das Werkzeug bringt für "${lang}" keine Texte mit.\n` +
+        `  Lege im Inhaltsordner die Datei i18n/${lang}.json an — am einfachsten\n` +
+        `  als Kopie von werkzeug/src/i18n/${referenceLang}.json, dann übersetzen.`,
+    );
+  }
+
+  const base = hasSystem ? readJsonFile(systemFile, `src/i18n/${lang}.json`) : {};
+  return hasHome ? merge(base, readJsonFile(homeFile, `i18n/${lang}.json`)) : base;
 }
 
 /** Setzt Platzhalter der Form {name} ein. */
@@ -44,10 +73,10 @@ function interpolate(text, values) {
  * Baut die Übersetzungsfunktionen für alle aktiven Sprachen.
  * Prüft dabei, dass jede Sprache dieselben Schlüssel hat.
  */
-export function loadI18n(config) {
+export function loadI18n(config, { overrideDir = null } = {}) {
   const byLanguage = new Map();
   for (const lang of config.languageCodes) {
-    byLanguage.set(lang, readStrings(lang));
+    byLanguage.set(lang, readStrings(lang, overrideDir, config.defaultLanguage));
   }
 
   const reference = config.defaultLanguage;
@@ -62,8 +91,9 @@ export function loadI18n(config) {
       if (missing.length > 0) parts.push(`fehlen: ${missing.join(', ')}`);
       if (extra.length > 0) parts.push(`zu viel: ${extra.join(', ')}`);
       fail(
-        `Die Oberflächentexte in src/i18n/${lang}.json stimmen nicht mit ${reference}.json überein.`,
-        parts.join(' — '),
+        `Die Oberflächentexte für "${lang}" stimmen nicht mit "${reference}" überein.`,
+        `${parts.join(' — ')}\n` +
+          `  Ergänzen lässt sich das im Inhaltsordner in i18n/${lang}.json.`,
       );
     }
   }
@@ -74,7 +104,10 @@ export function loadI18n(config) {
     const t = (key, values = {}) => {
       const text = key.split('.').reduce((node, part) => node?.[part], strings);
       if (typeof text !== 'string') {
-        fail(`Der Oberflächentext "${key}" fehlt in src/i18n/${lang}.json.`);
+        fail(
+          `Der Oberflächentext "${key}" fehlt für die Sprache "${lang}".`,
+          `Ergänze ihn im Inhaltsordner in i18n/${lang}.json.`,
+        );
       }
       return interpolate(text, values);
     };

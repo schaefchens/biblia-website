@@ -11,7 +11,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
-import { DIR, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadContent } from './lib/content.mjs';
 import { blank, color, heading, info, ok, runMain, warn } from './lib/log.mjs';
@@ -45,8 +45,9 @@ function yamlValue(text) {
 }
 
 runMain(async () => {
-  const config = loadConfig();
-  const content = loadContent(config);
+  const home = resolveHome();
+  const config = loadConfig({ home });
+  const content = loadContent(config, { dirs: home });
 
   heading('Neuen Flyer anlegen');
   info(color.gray('    Mit Strg+C jederzeit abbrechen. Es wird erst ganz am Ende etwas geschrieben.'));
@@ -117,7 +118,7 @@ runMain(async () => {
     const slug = slugify(title);
     const nextId = Math.max(100, ...content.flyers.map((flyer) => flyer.id)) + 1;
     const dirName = `${nextId}-${slug}`;
-    const target = path.join(DIR.flyers, dirName);
+    const target = path.join(home.flyers, dirName);
 
     if (slug === '') {
       warn('Aus dem Titel liess sich kein Kurzname bilden.');

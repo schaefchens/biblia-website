@@ -10,24 +10,32 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
-import { ROOT, rel } from './lib/paths.mjs';
+import { resolveHome, rel } from './lib/paths.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { loadContent, isScheduled } from './lib/content.mjs';
 import { loadI18n } from './lib/i18n.mjs';
 import { applyReleaseChecks } from './lib/release.mjs';
 import { parseRenames, parseHistoricIds, vanishedIds } from './lib/history.mjs';
 import { collectRedirects } from './lib/redirects.mjs';
+import { isRepositoryRoot } from './lib/repo.mjs';
 import { blank, color, formatBytes, heading, info, ok, warn, error, runMain, plural } from './lib/log.mjs';
 
 const args = process.argv.slice(2);
 const strict = args.includes('--strict');
 const fix = args.includes('--fix');
 
-/** Fragt Git und liefert die Ausgabe, oder null wenn Git nicht verfügbar ist. */
-function git(argv) {
+/**
+ * Fragt Git im Inhaltsordner, oder liefert null.
+ *
+ * Ausdrücklich der Inhaltsordner: das Werkzeug unter werkzeug/ ist ein
+ * eigenes Repository. Würde dessen Geschichte gelesen, fände sich dort
+ * kein einziger Flyer — und die Prüfungen auf umbenannte und verschwundene
+ * Nummern gingen lautlos ins Leere.
+ */
+function git(cwd, argv) {
   try {
     return execFileSync('git', argv, {
-      cwd: ROOT,
+      cwd,
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -43,8 +51,9 @@ function git(argv) {
  * Ohne die Historie aus slug_history brechen geteilte Links und
  * Suchergebnisse, sobald jemand einen Titel ändert.
  */
-function detectRenames(content) {
-  const output = git(['log', '--diff-filter=R', '--name-status', '--format=', '-M', '--', 'content/flyers']);
+function detectRenames(home, content) {
+  if (!isRepositoryRoot(home.root)) return [];
+  const output = git(home.root, ['log', '--diff-filter=R', '--name-status', '--format=', '-M', '--', 'content/flyers']);
   if (output === null) return [];
 
   const renames = [];
@@ -71,8 +80,11 @@ function detectRenames(content) {
  * Wird ein Ordner gelöscht oder umnummeriert, fällt das ohne diese Prüfung
  * niemandem auf — die Inhalte für sich sind dann ja widerspruchsfrei.
  */
-function historicFlyerIds() {
-  const output = git(['log', '--pretty=format:', '--name-only', '--', 'content/flyers']);
+function historicFlyerIds(home) {
+  // Ohne eigenes Repository würde Git im übergeordneten Ordner nachsehen
+  // und eine leere Geschichte liefern — die Prüfung sähe dann bestanden aus.
+  if (!isRepositoryRoot(home.root)) return null;
+  const output = git(home.root, ['log', '--pretty=format:', '--name-only', '--', 'content/flyers']);
   return output === null ? null : parseHistoricIds(output);
 }
 
@@ -101,20 +113,21 @@ function printGroup(subject, items) {
 }
 
 runMain(async () => {
-  const config = loadConfig();
+  const home = resolveHome();
+  const config = loadConfig({ home });
 
   heading('Biblia — Inhalte prüfen');
 
   // Oberflächentexte zuerst: ein fehlender Schlüssel bricht sonst erst
   // mitten im Build ab.
-  loadI18n(config);
+  loadI18n(config, { overrideDir: home.i18n });
   ok('Oberflächentexte vollständig');
 
-  const content = loadContent(config);
+  const content = loadContent(config, { dirs: home });
   const { issues } = content;
 
   // Umbenennungen erkennen.
-  const renames = detectRenames(content);
+  const renames = detectRenames(home, content);
   for (const { flyer, oldSlug, oldId } of renames) {
     if (oldId) {
       issues.error(flyer.dirName, `Die dauerhafte Nummer wurde von ${oldId} auf ${flyer.id} geändert.`, {
@@ -137,7 +150,17 @@ runMain(async () => {
   }
 
   // Verschwundene Nummern erkennen.
-  const historic = historicFlyerIds();
+  const historic = historicFlyerIds(home);
+  if (!historic) {
+    // Ohne Versionsgeschichte lässt sich nicht feststellen, ob eine Nummer
+    // verschwunden ist. Das still zu übergehen wäre das Gefährlichste:
+    // die Zusage hinter /f/123/ wäre dann ungeprüft.
+    issues.warning('Dauerhafte Adressen', 'Ohne Git lässt sich nicht prüfen, ob eine Nummer verschwunden ist.', {
+      hint:
+        'Die Adressen auf gedruckten Flyern sind damit ungeprüft.\n' +
+        '      Der Inhaltsordner sollte ein Git-Repository sein:  git init',
+    });
+  }
   if (historic) {
     for (const id of vanishedIds(historic, content.flyersById, config.retiredFlyerIds)) {
       issues.error('Dauerhafte Adressen', `Die Nummer ${id} gab es schon einmal, heute gibt es sie nicht mehr.`, {

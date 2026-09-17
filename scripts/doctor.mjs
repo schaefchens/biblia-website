@@ -12,7 +12,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
-import { DIR, FILE, ROOT, rel } from './lib/paths.mjs';
+import { SYS, WERKZEUG_DIR, findHome, rel } from './lib/paths.mjs';
+import { parseSubmoduleStatus, describeSubmoduleState } from './lib/werkzeug.mjs';
+import { repositoryRoot } from './lib/repo.mjs';
 import { readEnvFile, maskSecret } from './lib/env.mjs';
 import { blank, color, formatBytes, heading, info, ok, warn, error, runMain, plural } from './lib/log.mjs';
 
@@ -36,9 +38,9 @@ function problem(text, advice) {
 }
 
 /** Führt ein Kommando aus und meldet nur, ob es erfolgreich war. */
-function succeeds(command, args) {
+function succeeds(command, args, cwd = SYS.root) {
   try {
-    execFileSync(command, args, { cwd: ROOT, stdio: "ignore" });
+    execFileSync(command, args, { cwd, stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -49,7 +51,7 @@ function succeeds(command, args) {
 function run(command, args, options = {}) {
   try {
     return execFileSync(command, args, {
-      cwd: ROOT,
+      cwd: SYS.root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       ...options,
@@ -62,7 +64,7 @@ function run(command, args, options = {}) {
 function checkNode() {
   heading('Node.js');
   const current = process.versions.node;
-  const required = JSON.parse(fs.readFileSync(FILE.packageJson, 'utf8')).engines.node;
+  const required = JSON.parse(fs.readFileSync(SYS.packageJson, 'utf8')).engines.node;
   const min = required.replace(/[^0-9.]/g, '').split('.').map(Number);
   const have = current.split('.').map(Number);
   const tooOld =
@@ -79,7 +81,7 @@ function checkNode() {
 
 function checkDependencies() {
   heading('Programmbibliotheken');
-  if (!fs.existsSync(path.join(ROOT, 'node_modules'))) {
+  if (!fs.existsSync(path.join(SYS.root, 'node_modules'))) {
     problem(
       'Die Programmbibliotheken sind noch nicht installiert.',
       'Einmalig im Projektordner ausführen:  npm ci',
@@ -137,12 +139,12 @@ function checkDependencies() {
   }
 }
 
-async function checkConfig() {
+async function checkConfig(home) {
   heading('Konfiguration');
   let config;
   try {
     const { loadConfig } = await import('./lib/config.mjs');
-    config = loadConfig();
+    config = loadConfig({ home });
   } catch (err) {
     problem(err.message, err.hint);
     return null;
@@ -170,17 +172,17 @@ async function checkConfig() {
   return config;
 }
 
-function checkDeployConfig() {
+function checkDeployConfig(home) {
   heading('Zugangsdaten für das Hochladen');
-  if (!fs.existsSync(FILE.sftpEnv)) {
+  if (!fs.existsSync(home.sftpEnv)) {
     hint(
       'Die Datei sftp.env fehlt.',
-      `Kopiere ${rel(FILE.sftpEnvExample)} zu sftp.env und trage die Zugangsdaten ein. ` +
+      `Kopiere ${rel(home.sftpEnvExample)} zu sftp.env und trage die Zugangsdaten ein. ` +
         'Ohne sie funktionieren npm run deploy und npm run fetch nicht.',
     );
     return;
   }
-  const env = readEnvFile(FILE.sftpEnv);
+  const env = readEnvFile(home.sftpEnv);
   const required = ['SFTP_HOST', 'SFTP_USER', 'SFTP_PASSWORD', 'SFTP_REMOTE_ROOT'];
   const missing = required.filter((key) => !env[key]);
   if (missing.length > 0) {
@@ -204,7 +206,7 @@ function checkDeployConfig() {
 
   // Die Datei enthält ein Passwort im Klartext.
   try {
-    const mode = fs.statSync(FILE.sftpEnv).mode & 0o777;
+    const mode = fs.statSync(home.sftpEnv).mode & 0o777;
     if (process.platform !== 'win32' && (mode & 0o077) !== 0) {
       hint(
         `sftp.env ist für andere Benutzer lesbar (Rechte ${mode.toString(8)}).`,
@@ -218,41 +220,59 @@ function checkDeployConfig() {
   }
 }
 
-function checkGit() {
+function checkGit(home) {
   heading('Git und Sicherung');
   if (!run('git', ['--version'])) {
     problem('Git ist nicht installiert.', 'Von https://git-scm.com installieren.');
     return;
   }
-  if (!run('git', ['rev-parse', '--git-dir'])) {
-    problem('Dieser Ordner ist kein Git-Repository.', 'Ausführen:  git init');
+
+  // Ausdrücklich im Inhaltsordner: das Werkzeug unter werkzeug/ ist ein
+  // eigenes Repository. Ohne diese Unterscheidung prüfte alles Folgende
+  // die falsche Versionsgeschichte.
+  const inHome = (args) => run('git', args, { cwd: home.root });
+
+  const top = repositoryRoot(home.root);
+  if (!top) {
+    problem(
+      'Der Inhaltsordner ist kein Git-Repository.',
+      `Ohne Git gibt es keine Sicherung, und umbenannte oder gelöschte Flyer\n` +
+        `    fallen niemandem auf. Im Inhaltsordner ausführen:  git init`,
+    );
     return;
   }
-  pass('Git-Repository vorhanden');
+  if (top !== fs.realpathSync(home.root)) {
+    problem(
+      'Der Inhaltsordner ist nur ein Unterordner eines anderen Repositories.',
+      `Gefunden: ${top}\n    Erwartet: ${home.root}\n` +
+        '    Inhalte und Werkzeug müssen getrennte Repositories sein.',
+    );
+    return;
+  }
+  pass('Inhaltsordner ist ein eigenes Git-Repository');
 
-  const remotes = run('git', ['remote']);
+  const remotes = inHome(['remote']);
   if (!remotes) {
     hint(
       'Es ist kein Git-Remote eingerichtet — es gibt damit keine Sicherung der Inhalte.',
       'Ein privates Repository anlegen und verbinden:  git remote add origin <adresse>',
     );
   } else {
-    const url = run('git', ['remote', 'get-url', remotes.split('\n')[0]]);
+    const url = inHome(['remote', 'get-url', remotes.split('\n')[0]]);
     pass(`Sicherung: ${remotes.split('\n')[0]}`, url ? `→ ${url}` : '');
   }
 
-  if (!run('git', ['lfs', 'version'])) {
+  if (!inHome(['lfs', 'version'])) {
     problem(
       'Git LFS ist nicht installiert.',
       'Die Druck-PDFs werden über Git LFS verwaltet. Ohne LFS wird das Repository sehr gross. ' +
         'Installation: https://git-lfs.com — danach einmalig:  git lfs install',
     );
-  } else if (!run('git', ['config', '--get', 'filter.lfs.clean'])) {
+  } else if (!inHome(['config', '--get', 'filter.lfs.clean'])) {
     problem('Git LFS ist installiert, aber nicht aktiviert.', 'Einmalig ausführen:  git lfs install');
   } else {
-    const attributes = fs.existsSync(path.join(ROOT, '.gitattributes'))
-      ? fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf8')
-      : '';
+    const attributesFile = path.join(home.root, '.gitattributes');
+    const attributes = fs.existsSync(attributesFile) ? fs.readFileSync(attributesFile, 'utf8') : '';
     if (/^\*\.pdf\s+filter=lfs/m.test(attributes)) {
       pass('Git LFS ist aktiv und verwaltet die PDF-Dateien');
     } else {
@@ -263,7 +283,7 @@ function checkGit() {
   // Der wichtigste Test dieses Abschnitts: Bestelldaten enthalten Namen und
   // Postadressen und dürfen unter keinen Umständen ins Repository gelangen.
   const probe = path.join('app-data', 'orders', 'probe.json');
-  const ignored = succeeds('git', ['check-ignore', '-q', probe]);
+  const ignored = succeeds('git', ['check-ignore', '-q', probe], home.root);
   if (ignored) {
     pass('app-data/ wird von Git ignoriert', '— Bestelldaten bleiben aus dem Repository heraus');
   } else {
@@ -274,20 +294,21 @@ function checkGit() {
   }
 }
 
-function checkWorkspace(config) {
-  heading('Arbeitsverzeichnis');
+function checkWorkspace(home, config) {
+  heading('Inhaltsordner');
+  info(color.gray(`    ${home.root}`));
   try {
-    fs.mkdirSync(DIR.generated, { recursive: true });
-    const probe = path.join(DIR.generated, '.schreibtest');
+    fs.mkdirSync(home.generated, { recursive: true });
+    const probe = path.join(home.generated, '.schreibtest');
     fs.writeFileSync(probe, 'ok');
     fs.unlinkSync(probe);
-    pass('Schreibrechte im Projektordner vorhanden');
+    pass('Schreibrechte vorhanden');
   } catch {
-    problem('In den Projektordner kann nicht geschrieben werden.', `Rechte für ${ROOT} prüfen.`);
+    problem('In den Inhaltsordner kann nicht geschrieben werden.', `Rechte für ${home.root} prüfen.`);
   }
 
-  const flyerCount = fs.existsSync(DIR.flyers)
-    ? fs.readdirSync(DIR.flyers, { withFileTypes: true }).filter((e) => e.isDirectory()).length
+  const flyerCount = fs.existsSync(home.flyers)
+    ? fs.readdirSync(home.flyers, { withFileTypes: true }).filter((e) => e.isDirectory()).length
     : 0;
   if (flyerCount === 0) {
     hint(
@@ -298,7 +319,7 @@ function checkWorkspace(config) {
     pass(plural(flyerCount, 'Flyer im Inhaltsordner', 'Flyer im Inhaltsordner'));
   }
 
-  if (fs.existsSync(DIR.cache)) {
+  if (fs.existsSync(home.cache)) {
     let bytes = 0;
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -307,13 +328,13 @@ function checkWorkspace(config) {
         else bytes += fs.statSync(full).size;
       }
     };
-    walk(DIR.cache);
+    walk(home.cache);
     info(color.gray(`    Zwischenspeicher: ${formatBytes(bytes)} (löschen mit npm run clean)`));
   }
 
   // Sobald die Website unter der echten Domain läuft, darf die Sperre für
   // Suchmaschinen nicht mehr in der erzeugten .htaccess stehen.
-  const htaccess = path.join(DIR.dist, '.htaccess');
+  const htaccess = path.join(home.dist, '.htaccess');
   if (config && config.isCanonical && fs.existsSync(htaccess)) {
     if (fs.readFileSync(htaccess, 'utf8').includes('noindex')) {
       problem(
@@ -323,6 +344,46 @@ function checkWorkspace(config) {
     } else {
       pass('Keine Suchmaschinen-Sperre mehr aktiv');
     }
+  }
+}
+
+/**
+ * Der Stand des Werkzeugs.
+ *
+ * Ein Submodul läuft lautlos auseinander: "git clone" ohne
+ * --recurse-submodules lässt den Ordner leer, "git pull" holt den neuen
+ * Stand der Inhalte, aber nicht den des Werkzeugs. Beides sieht man dem
+ * Ordner nicht an — deshalb wird es hier benannt.
+ */
+function checkWerkzeug(home) {
+  heading('Werkzeug');
+  info(color.gray(`    ${SYS.root}`));
+
+  // Beim Arbeiten am Werkzeug selbst liegt es neben dem Inhaltsordner statt
+  // darin. Das ist kein Mangel, sondern der Entwicklungsfall — und soll
+  // nicht als Warnung erscheinen.
+  if (!SYS.root.startsWith(home.root + path.sep)) {
+    info(color.gray('    Das Werkzeug liegt nicht im Inhaltsordner — Entwicklungsaufbau.'));
+    info(color.gray('    Im Normalfall liegt es als Submodul unter werkzeug/.'));
+    return;
+  }
+
+  const status = parseSubmoduleStatus(
+    run('git', ['submodule', 'status', '--', WERKZEUG_DIR], { cwd: home.root }),
+  );
+  const described = describeSubmoduleState(status, { dir: WERKZEUG_DIR });
+
+  if (described.level === 'ok') pass(described.message);
+  else if (described.level === 'problem') problem(described.message, described.hint && `    ${described.hint}`);
+  else hint(described.message, described.hint && `    ${described.hint}`);
+
+  if (status.state === 'missing') return;
+
+  if (!fs.existsSync(path.join(SYS.root, 'node_modules'))) {
+    problem(
+      'Im Werkzeug fehlen die Programmbibliotheken.',
+      `    Einmalig ausführen:  cd ${WERKZEUG_DIR} && npm ci && cd ..`,
+    );
   }
 }
 
@@ -343,15 +404,33 @@ function checkOptional() {
 
 runMain(async () => {
   heading('Biblia — Systemprüfung');
-  info(color.gray(`    Projektordner: ${ROOT}`));
+
+  // Absichtlich nachsichtig: doctor ist der Befehl, den man gerade dann
+  // ausführt, wenn noch nichts eingerichtet ist. Er soll dann erklären,
+  // was fehlt, statt selbst abzubrechen.
+  const home = findHome();
 
   checkNode();
   checkDependencies();
-  const config = await checkConfig();
-  checkDeployConfig();
-  checkGit();
-  checkWorkspace(config);
-  checkOptional();
+
+  if (!home) {
+    heading('Inhaltsordner');
+    problem(
+      'Es wurde kein Inhaltsordner gefunden.',
+      '    Die Befehle werden im Inhaltsordner ausgeführt — dort liegen Flyer,\n' +
+        '    Einstellungen und Zugangsdaten.\n\n' +
+        '    Einen vorhandenen holen:   git clone --recurse-submodules <adresse>\n' +
+        `    Einen neuen anlegen:       node ${path.join(SYS.scripts, 'init.mjs')} <pfad>`,
+    );
+    checkOptional();
+  } else {
+    const config = await checkConfig(home);
+    checkDeployConfig(home);
+    checkGit(home);
+    checkWerkzeug(home);
+    checkWorkspace(home, config);
+    checkOptional();
+  }
 
   heading('Ergebnis');
   if (results.error === 0 && results.warn === 0) {
