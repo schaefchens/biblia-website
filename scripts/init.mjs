@@ -135,8 +135,12 @@ runMain(async () => {
     .replace('__NAME__', name);
   fs.writeFileSync(path.join(root, 'package.json'), pkg);
 
+  // Der Einstieg gehört bewusst in den Inhaltsordner: er ist das Einzige,
+  // was noch antwortet, wenn das Werkzeug fehlt.
+  copyTemplate('biblia.mjs', path.join(root, 'biblia.mjs'));
+
   fs.copyFileSync(SYS.sftpEnvExample, path.join(root, 'sftp.env.example'));
-  info(color.gray('    package.json, README.md, config/site.json, sftp.env.example'));
+  info(color.gray('    package.json, biblia.mjs, README.md, config/site.json'));
 
   // --- Git ---
   if (!withGit) {
