@@ -52,6 +52,13 @@ Die Verbindung ist unverschlüsselt. `--lan` gehört deshalb nur in ein
 vertrauenswürdiges Netz; für den Dauerbetrieb HTTPS über einen lokalen
 Reverse Proxy oder ein VPN vorschalten.
 
+Unter **Einstellungen** lassen sich die Angaben aus `config/site.json`
+ändern — Name, Adresse, Empfängeradressen, Aufbewahrungsfristen, Sprachen —
+und die Zugangsdaten aus `sftp.env`. Passwörter und Schlüssel werden dabei
+nie angezeigt: es steht nur da, ob etwas hinterlegt ist. Ein leeres Feld
+lässt den bisherigen Wert stehen. Im Netzbetrieb (`--lan`) sind die
+Zugangsdaten gesperrt.
+
 Die Oberfläche kann auch Vorschläge von einer KI einholen. Das ist
 freiwillig: ohne hinterlegten Schlüssel funktioniert alles andere
 unverändert. Vorschläge werden nie von selbst gespeichert, und Bestellungen

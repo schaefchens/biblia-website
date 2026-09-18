@@ -8,7 +8,7 @@ topics:
 tags: []
 bible_refs: []
 # Entwurf. Auf "published" setzen, sobald der Flyer erscheinen soll.
-status: published
+status: archived
 date: 2026-09-18
 featured: false
 # Auf true setzen, wenn die PDF-Datei zum Herunterladen angeboten werden soll.
