@@ -12,8 +12,19 @@ zu ändern.
 
 ## Der Alltag
 
-Drei Befehle genügen im Normalfall. Alle werden im Terminal **in diesem
-Ordner** eingegeben.
+Am bequemsten geht alles über die Bedienoberfläche im Browser:
+
+```bash
+npm run assistant
+```
+
+Sie öffnet sich von selbst und führt durch Anlegen, Prüfen, Vorschau und
+Veröffentlichen — ohne YAML, ohne Git, ohne weitere Befehle. Was sie
+schreibt, sind dieselben Dateien wie unten: beide Wege lassen sich
+nebeneinander benutzen.
+
+Wer lieber im Terminal arbeitet, kommt mit drei Befehlen aus. Alle werden
+**in diesem Ordner** eingegeben.
 
 ```bash
 npm run check      # Stimmen alle Inhalte?
@@ -21,7 +32,34 @@ npm run preview    # Wie sieht es aus?
 npm run publish    # Veröffentlichen
 ```
 
+### Die Oberfläche im Browser
+
+```bash
+npm run assistant                 # nur auf diesem Rechner
+npm run assistant -- --port 8080  # anderer Port
+npm run assistant -- --no-open    # Browser nicht öffnen
+npm run assistant -- --lan        # auch für andere im selben Netz
+```
+
+Ohne `--lan` ist die Oberfläche ausschliesslich auf diesem Rechner
+erreichbar. Mit `--lan` verlangt sie ein Kennwort; es steht in
+`BIBLIA_ASSISTANT_PASSWORD` in der Datei `sftp.env`, und fehlt es dort, wird
+für diesen Start eines erzeugt und im Terminal angezeigt. Der Zugriff erfolgt
+dann über die IP-Adresse, die das Terminal nennt — ein Name funktioniert
+absichtlich nicht.
+
+Die Verbindung ist unverschlüsselt. `--lan` gehört deshalb nur in ein
+vertrauenswürdiges Netz; für den Dauerbetrieb HTTPS über einen lokalen
+Reverse Proxy oder ein VPN vorschalten.
+
+Die Oberfläche kann auch Vorschläge von einer KI einholen. Das ist
+freiwillig: ohne hinterlegten Schlüssel funktioniert alles andere
+unverändert. Vorschläge werden nie von selbst gespeichert, und Bestellungen
+und Kontaktnachrichten sind für die KI technisch nicht erreichbar.
+
 ### Einen neuen Flyer anlegen
+
+In der Oberfläche: **Flyer → Neuer Flyer**. Im Terminal:
 
 ```bash
 npm run new
@@ -148,6 +186,7 @@ ausführt, liegt selbst in `werkzeug/`.
 
 | Befehl | Bedeutung |
 | --- | --- |
+| `npm run assistant` | Öffnet die Bedienoberfläche im Browser |
 | `npm run check` | Prüft alle Inhalte und meldet Fehler und Hinweise |
 | `npm run build` | Erzeugt die fertige Website in `dist/` |
 | `npm run preview` | Zeigt die Website lokal im Browser |

@@ -19,4 +19,5 @@ order:
   currency: EUR
   min_quantity: 1
   max_quantity: 100
+featured: false
 ---
