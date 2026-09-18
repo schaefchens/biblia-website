@@ -48,9 +48,31 @@ für diesen Start eines erzeugt und im Terminal angezeigt. Der Zugriff erfolgt
 dann über die IP-Adresse, die das Terminal nennt — ein Name funktioniert
 absichtlich nicht.
 
+Die Oberfläche ist ein eigenes Repository und wird mit dem Werkzeug zusammen
+geladen. Meldet `npm run assistant`, sie sei nicht eingerichtet, fehlt genau
+das — einmalig nachholen:
+
+```bash
+git -C werkzeug submodule update --init assistant
+```
+
 Die Verbindung ist unverschlüsselt. `--lan` gehört deshalb nur in ein
 vertrauenswürdiges Netz; für den Dauerbetrieb HTTPS über einen lokalen
 Reverse Proxy oder ein VPN vorschalten.
+
+In der Flyerübersicht steht zu jedem Flyer sein Titelbild; beim Bearbeiten
+erscheint es gross, daneben die QR-Codes mit der Kurzadresse. Es gibt sie in
+zwei Stilen — klassisch mit scharfen Quadraten und abgerundet —, beide mit
+demselben Muster und derselben Adresse. Beide lassen sich als SVG
+herunterladen; es sind dieselben Dateien wie in `print-assets/`, für die
+Druckgestaltung. Für sehr kleinen Druck oder raues Papier ist der klassische
+die sicherere Wahl. Beides gibt es erst, nachdem einmal `npm run preview`
+oder die Vorschau in der Oberfläche gelaufen ist.
+
+Unter **Seiten** lassen sich Startseite, Über uns, Kontakt, Impressum und
+Datenschutz bearbeiten. Für Impressum und Datenschutz zeigt die Oberfläche
+dabei an, welche Platzhalter noch im Text stehen — genau die verhindern den
+Umzug auf die endgültige Domain.
 
 Unter **Einstellungen** lassen sich die Angaben aus `config/site.json`
 ändern — Name, Adresse, Empfängeradressen, Aufbewahrungsfristen, Sprachen —
@@ -179,7 +201,7 @@ dann wurde beim Holen das `--recurse-submodules` vergessen und der Ordner
 `werkzeug/` ist leer geblieben. Einmalig nachholen:
 
 ```bash
-git submodule update --init
+git submodule update --init --recursive
 npm run setup
 ```
 
